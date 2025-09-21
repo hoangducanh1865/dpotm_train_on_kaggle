@@ -144,7 +144,7 @@ class BasicTrainer:
                 
                 f.write(json.dumps(topic_data) + '\n')
         
-        top_words = ' '.join(top_words)
+        # top_words = ' '.join(top_words)
         return top_words
 
     def save_theta(self, dataset_handler, dir_path):
@@ -378,7 +378,7 @@ class FastBasicTrainer:
                 
                 f.write(json.dumps(topic_data) + '\n')
         
-        top_words = ' '.join(top_words)
+        # top_words = ' '.join(top_words)
         return top_words
 
     def save_theta(self, train_theta, dataset_handler, dir_path):
@@ -582,7 +582,7 @@ class WeteBasicTrainer:
                 
                 f.write(json.dumps(topic_data) + '\n')
         
-        top_words = ' '.join(top_words)
+        # top_words = ' '.join(top_words)
         return top_words
 
     def save_theta(self, dataset_handler, dir_path):
@@ -763,7 +763,7 @@ class CTMBasicTrainer:
                 
                 f.write(json.dumps(topic_data) + '\n')
         
-        top_words = ' '.join(top_words)
+        # top_words = ' '.join(top_words)
         return top_words
 
     def save_theta(self, dataset_handler, dir_path):
