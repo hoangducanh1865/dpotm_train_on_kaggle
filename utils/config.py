@@ -51,7 +51,7 @@ def add_training_argument(parser):
                         help='learning rate')
     parser.add_argument('--finetune_lr', type=float, default=0.002, # [0.0001, 0.0005, 0.001, 0.002]
                         help='fine-tune learning rate')
-    parser.add_argument('--device', type=str, default='cpu',
+    parser.add_argument('--device', type=str, default='cuda',
                         help='device to run the model, cuda or cpu')
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--lr_scheduler', type=str,
