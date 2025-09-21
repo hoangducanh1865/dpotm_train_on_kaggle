@@ -29,7 +29,7 @@ def TC_on_wikipedia(top_word_path, cv_type='C_V'):
     Compute the TC score on the Wikipedia dataset
     """
     jar_dir = "evaluations"
-    wiki_dir = "/kaggle/input/wikipedia/wikipedia_bd"
+    wiki_dir = "/kaggle/input/wikipedia/wikipedia_bd/"
     random_number = np.random.randint(100000)
     os.system(
         f"java -jar {os.path.join(jar_dir, 'pametto.jar')} {wiki_dir} {cv_type} {top_word_path} > tmp{random_number}.txt")
