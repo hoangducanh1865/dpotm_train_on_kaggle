@@ -65,7 +65,7 @@ def add_eval_argument(parser):
 
 
 def add_checkpoint_argument(parser):
-    parser.add_argument('--checkpoint_path', type=str, default=None,
+    parser.add_argument('--checkpoint_path', type=str, default=cfg.CHECKPOINT_PATH,
                         help='Path to checkpoint file to resume training')
     
     
