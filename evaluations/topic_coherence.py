@@ -31,7 +31,7 @@ def TC_on_wikipedia(top_word_path, cv_type='C_V'):
     jar_dir = "evaluations"
     wiki_dir = os.path.join("..", "wikipedia", "wikipedia_bd")
     # Debug
-    print(wiki_dir)
+    print(f'wiki_dir: {wiki_dir}')
     random_number = np.random.randint(100000)
     os.system(
         f"java -jar {os.path.join(jar_dir, 'pametto.jar')} {wiki_dir} {cv_type} {top_word_path} > tmp{random_number}.txt")
