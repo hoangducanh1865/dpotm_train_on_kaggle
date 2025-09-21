@@ -292,7 +292,7 @@ if __name__ == "__main__":
                              device=args.device,
                              checkpoint_dir=current_checkpoint_dir,
                              preference_dataset_path=preference_dataset_creator.preference_dataset_path)
-    finetuner.load_checkpoint(checkpoint_path=args.checkpoint_path)
+    finetuner.load_checkpoint(checkpoint_path=args.checkpoint_path if args.checkpoint_path else os.path.join(current_checkpoint_dir, 'checkpoint_epoch_500.pth'))
     finetuner.finetune(dataset) # included save checkpoint 500 or 600
     beta = finetuner.save_beta(current_run_dir)
     train_theta, test_theta = finetuner.save_theta(dataset, current_run_dir)
