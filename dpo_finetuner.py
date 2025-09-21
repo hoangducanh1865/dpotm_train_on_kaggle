@@ -146,7 +146,8 @@ class DPOFinetuner:
                 
                 f.write(json.dumps(topic_data) + '\n')
         
-        return top_words, top_word_indices
+        top_words = ' '.join(top_words)
+        return top_words
 
     def save_theta(self, dataset_handler, dir_path):
         train_theta, test_theta = self.export_theta(dataset_handler)
