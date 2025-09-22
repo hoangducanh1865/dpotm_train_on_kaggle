@@ -29,23 +29,11 @@ def add_model_argument(parser):
     
     parser.add_argument('--weight_GR', type=float, default=1.)
     parser.add_argument('--alpha_GR', type=float, default=5.)
-    parser.add_argument('--weight_InfoNCE', type=float, default=50.)
+    parser.add_argument('--weight_InfoNCE', type=float, default=50.0) # [50.0, 100.0, 150.0]
     parser.add_argument('--beta_temp', type=float, default=0.2)
-    parser.add_argument('--weight_ECR', type=float, default=100.0)
+    parser.add_argument('--weight_ECR', type=float, default=100.0) # [100.0, 150.0, 1=200.0]
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
-    
-    # DPO fine-tuning parameters
-    parser.add_argument('--lambda_dpo', type=float, default=0.5,
-                        help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.005,
-                        help='Regularization loss weight')
-    parser.add_argument('--lambda_diversity', type=float, default=0.1,
-                        help='Topic diversity loss weight')
-    parser.add_argument('--use_ipo', action='store_true', default=False,
-                        help='Use IPO loss instead of standard DPO')
-    parser.add_argument('--label_smoothing', type=float, default=0.0,
-                        help='Label smoothing for preference loss')
 
 def add_wete_argument(parser):
     parser.add_argument('--glove', type=str, default='glove.6B.100d.txt', help='embedding model name')

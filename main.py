@@ -77,12 +77,7 @@ if __name__ == "__main__":
                       dropout=args.dropout, 
                       pretrained_WE=pretrainWE if args.use_pretrainWE else None, 
                       weight_loss_ECR=args.weight_ECR,
-                      current_run_dir=current_run_dir,
-                      lambda_dpo=args.lambda_dpo,
-                      lambda_reg=args.lambda_reg,
-                      lambda_diversity=args.lambda_diversity,
-                      use_ipo=args.use_ipo,
-                      label_smoothing=args.label_smoothing)
+                      current_run_dir=current_run_dir)
     elif args.model == "FASTOPIC":
         model = FASTOPIC(vocab_size=dataset.vocab_size, num_topics=args.num_topics)
     elif args.model == "NSTM":
