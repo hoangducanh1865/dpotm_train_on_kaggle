@@ -16,7 +16,7 @@ def run_training_with_optimized_params():
     base_cmd = [
         sys.executable, "main.py",
         "--model", "ECRTM",
-        "--dataset", "20NG",  # Change this to your dataset
+        "--dataset", "BBC_new",  # Change this to your dataset
         "--num_topics", "50",
         "--device", "cuda",
         "--use_pretrainWE"
