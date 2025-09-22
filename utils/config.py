@@ -44,12 +44,6 @@ def add_model_argument(parser):
                         help='Use IPO loss instead of standard DPO for stable training')
     parser.add_argument('--label_smoothing', type=float, default=0.25,  # Tăng từ 0.15 → 0.25 cho much better generalization
                         help='Label smoothing for preference loss to reduce overfitting')
-    parser.add_argument('--lambda_reg', type=float, default=0.02,  # Tăng từ 0.01 → 0.02 cho stronger regularization
-                        help='Regularization loss weight')
-    parser.add_argument('--use_ipo', action='store_true', default=True,  # Keep IPO for stability
-                        help='Use IPO loss instead of standard DPO for stable training')
-    parser.add_argument('--label_smoothing', type=float, default=0.25,  # Tăng từ 0.15 → 0.25 cho much better generalization
-                        help='Label smoothing for preference loss to reduce overfitting')
 
 def add_wete_argument(parser):
     parser.add_argument('--glove', type=str, default='glove.6B.100d.txt', help='embedding model name')
