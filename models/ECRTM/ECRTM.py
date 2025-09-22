@@ -431,12 +431,14 @@ class ECRTM(nn.Module):
         # Use AdamW for better weight decay regularization
         optimizer = AdamW(
             [
-                {"params": self.encoder.parameters(), "lr": lr, "weight_decay": weight_decay},
-                {"params": self.fc_mean.parameters(), "lr": lr, "weight_decay": weight_decay},
-                {"params": self.fc_logvar.parameters(), "lr": lr, "weight_decay": weight_decay},
-                {"params": self.fc_decoder.parameters(), "lr": lr * 0.8, "weight_decay": weight_decay * 0.5},  # Slightly lower for decoder
-                {"params": self.beta.parameters(), "lr": lr * 1.2, "weight_decay": weight_decay * 0.3},  # Higher for topic words
-                {"params": self.w_centeroids.parameters(), "lr": lr * 0.5, "weight_decay": weight_decay * 2.0}  # Lower for centroids with more regularization
+                {"params": self.fc11.parameters(), "lr": lr, "weight_decay": weight_decay},
+                {"params": self.fc12.parameters(), "lr": lr, "weight_decay": weight_decay},
+                {"params": self.fc21.parameters(), "lr": lr, "weight_decay": weight_decay},
+                {"params": self.fc22.parameters(), "lr": lr, "weight_decay": weight_decay},
+                {"params": self.word_embeddings, "lr": lr * 1.2, "weight_decay": weight_decay * 0.3},  # Higher for word embeddings
+                {"params": self.topic_embeddings, "lr": lr * 1.2, "weight_decay": weight_decay * 0.3},  # Higher for topic embeddings
+                {"params": self.mu2, "lr": lr * 0.5, "weight_decay": weight_decay * 2.0},  # Lower for priors
+                {"params": self.var2, "lr": lr * 0.5, "weight_decay": weight_decay * 2.0}   # Lower for priors
             ],
             betas=(0.9, 0.999),
             eps=1e-8,
@@ -452,12 +454,12 @@ class ECRTM(nn.Module):
         import torch.nn.utils
         
         # Clip gradients with different norms for different parameter groups
-        torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), max_norm)
-        torch.nn.utils.clip_grad_norm_(self.fc_mean.parameters(), max_norm)
-        torch.nn.utils.clip_grad_norm_(self.fc_logvar.parameters(), max_norm * 0.8)  # More conservative for variance
-        torch.nn.utils.clip_grad_norm_(self.fc_decoder.parameters(), max_norm * 1.2)
-        torch.nn.utils.clip_grad_norm_(self.beta.parameters(), max_norm * 1.5)  # Allow larger gradients for topic words
-        torch.nn.utils.clip_grad_norm_(self.w_centeroids.parameters(), max_norm * 0.6)  # Conservative for centroids
+        torch.nn.utils.clip_grad_norm_(self.fc11.parameters(), max_norm)
+        torch.nn.utils.clip_grad_norm_(self.fc12.parameters(), max_norm)
+        torch.nn.utils.clip_grad_norm_(self.fc21.parameters(), max_norm * 0.8)  # More conservative for topic mean
+        torch.nn.utils.clip_grad_norm_(self.fc22.parameters(), max_norm * 0.8)  # More conservative for topic variance
+        torch.nn.utils.clip_grad_norm_([self.word_embeddings], max_norm * 1.5)  # Allow larger gradients for embeddings
+        torch.nn.utils.clip_grad_norm_([self.topic_embeddings], max_norm * 1.5)  # Allow larger gradients for topic embeddings
     
     def get_learning_rate_scheduler(self, optimizer, total_steps, warmup_steps=None):
         """
