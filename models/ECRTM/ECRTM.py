@@ -5,6 +5,8 @@ from torch import nn
 import torch.nn.functional as F
 from .ECR import ECR
 from utils.configs import Configs as cfg
+from utils.topic_drift_monitor import TopicDriftMonitor
+from utils.preference_dataset_creator import PreferenceDatasetCreator
 import json
 import random
 
@@ -15,7 +17,7 @@ class ECRTM(nn.Module):
 
         Xiaobao Wu, Xinshuai Dong, Thong Thanh Nguyen, Anh Tuan Luu.
     '''
-    def __init__(self, vocab_size, num_topics=50, en_units=200, dropout=0., pretrained_WE=None, embed_size=200, beta_temp=0.2, weight_loss_ECR=100.0, sinkhorn_alpha=20.0, sinkhorn_max_iter=1000, current_run_dir=None, lambda_dpo=0.5, lambda_reg=0.005, use_ipo=False, label_smoothing=0.0):
+    def __init__(self, vocab_size, num_topics=50, en_units=200, dropout=0., pretrained_WE=None, embed_size=200, beta_temp=0.2, weight_loss_ECR=100.0, sinkhorn_alpha=20.0, sinkhorn_max_iter=1000, current_run_dir=None, lambda_dpo=0.5, lambda_reg=0.005, use_ipo=False, label_smoothing=0.0, vocab=None):
         super().__init__()
 
         self.is_finetuing = False
@@ -24,6 +26,7 @@ class ECRTM(nn.Module):
         self.num_topics = num_topics
         self.beta_temp = beta_temp
         self.current_run_dir = current_run_dir
+        self.vocab = vocab  # Store vocab for drift monitoring
         
         # DPO hyperparameters với giá trị tối ưu
         self.lambda_dpo = lambda_dpo
@@ -35,6 +38,10 @@ class ECRTM(nn.Module):
         self.preference_cache = None
         self.reward_accuracies = []
         self.reward_margins = []
+        
+        # Topic drift monitoring
+        self.drift_monitor = None
+        self.preference_refresh_needed = False
         
         self.beta_ref_path = None
         self.beta_ref = None
@@ -122,6 +129,101 @@ class ECRTM(nn.Module):
         cost = self.pairwise_euclidean_distance(self.topic_embeddings, self.word_embeddings)
         loss_ECR = self.ECR(cost)
         return loss_ECR
+    
+    def initialize_drift_monitoring(self):
+        """Initialize topic drift monitor for preference dataset refresh."""
+        if self.vocab is not None and self.drift_monitor is None:
+            self.drift_monitor = TopicDriftMonitor(
+                vocab=self.vocab,
+                num_topics=self.num_topics,
+                top_k=25,  # Monitor top-25 words
+                jaccard_threshold=0.6,  # Refresh if mean Jaccard < 0.6
+                check_interval=10  # Check every 10 epochs
+            )
+            print(f"Initialized topic drift monitor with Jaccard threshold {0.6}")
+    
+    def check_topic_drift(self, current_epoch: int) -> dict:
+        """Check for topic drift and determine if preference refresh is needed."""
+        if self.drift_monitor is None:
+            self.initialize_drift_monitoring()
+        
+        if self.drift_monitor is not None:
+            beta = self.get_beta()
+            drift_result = self.drift_monitor.check_drift(beta, current_epoch)
+            
+            if drift_result["should_refresh"]:
+                self.preference_refresh_needed = True
+                print(f"🚨 TOPIC DRIFT DETECTED! Will refresh preference dataset.")
+                print(f"   Mean Jaccard: {drift_result['mean_jaccard']:.3f}")
+                print(f"   Drifted topics: {drift_result['num_drifted']}/{self.num_topics}")
+            
+            return drift_result
+        
+        return {"drift_detected": False, "should_refresh": False}
+    
+    def refresh_preference_dataset(self):
+        """Refresh preference dataset when topics drift too much."""
+        if not self.preference_refresh_needed:
+            return False
+            
+        try:
+            print("🔄 Refreshing preference dataset due to topic drift...")
+            
+            # 1. Save current beta as new top words
+            beta = self.get_beta()
+            top_words, top_word_indices = self.export_top_words_for_preference()
+            
+            # 2. Create new preference dataset using LLM
+            preference_creator = PreferenceDatasetCreator(self.current_run_dir)
+            preference_creator.create()
+            
+            # 3. Clear cached preference data to force reload
+            self.preference_cache = None
+            self.preference_dataset = None
+            
+            # 4. Update drift monitor reference
+            if self.drift_monitor is not None:
+                self.drift_monitor.update_reference(beta)
+            
+            # 5. Update reference beta
+            self.beta_ref = beta.clone().detach()
+            self.beta_ref.requires_grad = False
+            
+            self.preference_refresh_needed = False
+            print("✅ Preference dataset refreshed successfully!")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to refresh preference dataset: {e}")
+            self.preference_refresh_needed = False  # Reset to avoid infinite loops
+            return False
+    
+    def export_top_words_for_preference(self, num_top_words: int = 25):
+        """Export top words in format needed for preference dataset creation."""
+        beta = self.get_beta().detach().cpu().numpy()
+        
+        # Get top word indices for each topic
+        top_word_indices = []
+        for k in range(self.num_topics):
+            top_indices = np.argsort(beta[k])[::-1][:num_top_words]
+            top_word_indices.append(top_indices.tolist())
+        
+        # Save in JSONL format for preference dataset creation
+        top_words_path = os.path.join(self.current_run_dir, f'top_words_{num_top_words}.jsonl')
+        with open(top_words_path, 'w') as f:
+            for k, indices in enumerate(top_word_indices):
+                top_words_with_indices = []
+                for idx in indices:
+                    word = self.vocab[idx] if self.vocab else f"word_{idx}"
+                    top_words_with_indices.append({word: idx})
+                
+                topic_data = {
+                    'k': k,
+                    'top_words': top_words_with_indices
+                }
+                f.write(json.dumps(topic_data) + '\n')
+        
+        return top_word_indices, top_words_path
     
     def load_preference_dataset(self):
         self.preference_dataset_path = os.path.join(self.current_run_dir, 'preference_dataset.jsonl')

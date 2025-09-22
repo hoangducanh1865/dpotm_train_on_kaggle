@@ -81,7 +81,8 @@ if __name__ == "__main__":
                       lambda_dpo=args.lambda_dpo,
                       lambda_reg=args.lambda_reg,
                       use_ipo=args.use_ipo,
-                      label_smoothing=args.label_smoothing)
+                      label_smoothing=args.label_smoothing,
+                      vocab=dataset.vocab)
     elif args.model == "FASTOPIC":
         model = FASTOPIC(vocab_size=dataset.vocab_size, num_topics=args.num_topics)
     elif args.model == "NSTM":

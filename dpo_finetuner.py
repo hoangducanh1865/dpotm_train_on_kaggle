@@ -55,6 +55,22 @@ class DPOFinetuner:
         data_size = len(dataset_handler.train_dataloader.dataset)
 
         for epoch in tqdm(range(self.epochs + 1, self.epochs + self.finetune_epochs + 1)):
+            
+            # 🚨 TOPIC DRIFT MONITORING - Check before training
+            if hasattr(self.model, 'check_topic_drift'):
+                drift_result = self.model.check_topic_drift(epoch)
+                
+                # If drift detected, refresh preference dataset
+                if drift_result.get("should_refresh", False):
+                    refresh_success = self.model.refresh_preference_dataset()
+                    if refresh_success:
+                        self.logger.info(f"Preference dataset refreshed at epoch {epoch}")
+                        # Log detailed drift info
+                        self.logger.info(
+                            f"Drift details - Mean Jaccard: {drift_result.get('mean_jaccard', 0):.3f}, "
+                            f"Drifted topics: {drift_result.get('num_drifted', 0)}/{self.model.num_topics}"
+                        )
+            
             self.model.train()
             loss_rst_dict = defaultdict(float)
             # wandb.log({'epoch': epoch})
@@ -121,6 +137,22 @@ class DPOFinetuner:
                         total_norm += param_norm.item() ** 2
                 total_norm = total_norm ** (1. / 2)
                 self.logger.info(f'Gradient norm: {total_norm:.6f}')
+                
+                # 📊 Log drift monitoring info if available
+                if hasattr(self.model, 'drift_monitor') and self.model.drift_monitor is not None:
+                    # Get latest drift stats (without triggering new check)
+                    if hasattr(self.model.drift_monitor, 'last_check_epoch') and \
+                       self.model.drift_monitor.last_check_epoch == epoch:
+                        # We just checked drift this epoch, log it
+                        beta = self.model.get_beta()
+                        current_top_words = self.model.drift_monitor.get_top_words_indices(beta, k=10)
+                        if self.model.drift_monitor.reference_top_words is not None:
+                            jaccard_scores = self.model.drift_monitor.compute_topic_jaccard_scores(
+                                current_top_words, 
+                                [ref[:10] for ref in self.model.drift_monitor.reference_top_words]
+                            )
+                            mean_jaccard = np.mean(jaccard_scores)
+                            self.logger.info(f'Topic stability (Jaccard): {mean_jaccard:.3f}')
             
             if epoch == 600:
                 self.save_checkpoint(epoch)
