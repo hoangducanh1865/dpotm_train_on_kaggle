@@ -8,7 +8,7 @@ def new_parser(name=None):
 
 def add_dataset_argument(parser):
     parser.add_argument('--dataset', type=str,
-                        help='dataset name', default='20NG')
+                        help='dataset name', default='BBC_new')
     parser.add_argument('--plm_model', type=str,
                         help='plm model name', default='all-mpnet-base-v2')
     
