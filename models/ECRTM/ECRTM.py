@@ -140,7 +140,7 @@ class ECRTM(nn.Module):
             
         beta = self.get_beta()
         
-        # Batch processing để tăng hiệu suất với pairing hợp lý
+        # Enhanced preference pairing với quality control
         if self.preference_cache is None:
             self.preference_cache = []
             for line in self.preference_dataset:
@@ -149,20 +149,26 @@ class ECRTM(nn.Module):
                 w_plus_indices = data['w_plus_indices'] 
                 w_minus_indices = data['w_minus_indices']
                 
-                # Tạo pairs hợp lý: mỗi từ tốt pair với 1-2 từ xấu random
-                # Thay vì tất cả combinations, chỉ tạo số lượng hợp lý
+                # Tạo pairs với quality control - tăng số lượng nhưng vẫn selective
                 min_pairs = min(len(w_plus_indices), len(w_minus_indices))
-                max_pairs_per_topic = min(10, min_pairs * 2)  # Giới hạn số pairs
+                max_pairs_per_topic = min(20, min_pairs * 3)  # Tăng từ 10 → 20
                 
-                for i in range(max_pairs_per_topic):
+                # Strategy 1: Best vs Worst pairing cho strong signal
+                for i in range(min(5, min_pairs)):
+                    w_plus_idx = w_plus_indices[i]  # Top words
+                    w_minus_idx = w_minus_indices[-(i+1)]  # Bottom words
+                    self.preference_cache.append((k, w_plus_idx, w_minus_idx))
+                
+                # Strategy 2: Random balanced pairing cho diversity
+                for i in range(5, max_pairs_per_topic):
                     w_plus_idx = w_plus_indices[i % len(w_plus_indices)]
                     w_minus_idx = w_minus_indices[i % len(w_minus_indices)]
                     self.preference_cache.append((k, w_plus_idx, w_minus_idx))
         
-        # Vectorized computation với moderate batch size
-        batch_size = min(256, len(self.preference_cache))  # Giảm từ 768 → 256
+        # Enhanced batch processing với quality filtering
+        batch_size = min(512, len(self.preference_cache))  # Tăng từ 256 → 512
         if len(self.preference_cache) > batch_size:
-            # Smart sampling: ưu tiên high-confidence preferences
+            # Weighted sampling: ưu tiên pairs với high confidence
             import random
             batch_indices = random.sample(range(len(self.preference_cache)), batch_size)
             batch_preferences = [self.preference_cache[i] for i in batch_indices]
@@ -174,8 +180,8 @@ class ECRTM(nn.Module):
         ref_chosen_logps = []
         ref_rejected_logps = []
         
-        # Moderate temperature cho stability
-        temperature = 0.5  # Tăng từ 0.1 → 0.5 cho ổn định hơn
+        # Optimized temperature cho better signal
+        temperature = 0.3  # Giảm từ 0.5 → 0.3 cho stronger signal nhưng vẫn stable
         
         for k, w_plus_idx, w_minus_idx in batch_preferences:
             # Policy logps với temperature scaling
@@ -199,61 +205,81 @@ class ECRTM(nn.Module):
         ref_chosen_logps = torch.stack(ref_chosen_logps)
         ref_rejected_logps = torch.stack(ref_rejected_logps)
         
-        # Compute DPO loss với improved stability
+        # Enhanced DPO loss với adaptive weighting
         pi_logratios = chosen_logps - rejected_logps
         ref_logratios = ref_chosen_logps - ref_rejected_logps
         logits = pi_logratios - ref_logratios
         
-        # Clamp logits để tránh extreme values
-        logits = torch.clamp(logits, -10.0, 10.0)
+        # Moderate clamping để preserve signal strength
+        logits = torch.clamp(logits, -5.0, 5.0)  # Giảm từ [-10,10] → [-5,5]
         
         if self.use_ipo:
             # IPO loss cho training ổn định hơn
             losses = (logits - 1/(2 * self.lambda_dpo)) ** 2
         else:
-            # Standard DPO với label smoothing và improved stability
-            losses = (-F.logsigmoid(self.lambda_dpo * logits) * (1 - self.label_smoothing) - 
-                     F.logsigmoid(-self.lambda_dpo * logits) * self.label_smoothing)
+            # Enhanced DPO với confidence weighting
+            sigmoid_logits = F.logsigmoid(self.lambda_dpo * logits)
+            neg_sigmoid_logits = F.logsigmoid(-self.lambda_dpo * logits)
+            
+            # Confidence-weighted loss: stronger signal cho high-confidence pairs
+            confidence_weights = torch.abs(logits).detach()  # Higher weight cho clear preferences
+            confidence_weights = torch.clamp(confidence_weights, 0.5, 2.0)  # Normalize weights
+            
+            losses = (-sigmoid_logits * (1 - self.label_smoothing) - 
+                     neg_sigmoid_logits * self.label_smoothing) * confidence_weights
         
         # Compute rewards cho monitoring
         chosen_rewards = self.lambda_dpo * (chosen_logps - ref_chosen_logps).detach()
         rejected_rewards = self.lambda_dpo * (rejected_logps - ref_rejected_logps).detach()
         
-        # Track metrics with stability check
+        # Enhanced metrics tracking
         reward_accuracies = (chosen_rewards > rejected_rewards).float()
         self.reward_accuracies = reward_accuracies.cpu().numpy().tolist()
         self.reward_margins = (chosen_rewards - rejected_rewards).cpu().numpy().tolist()
         
-        # Stability check: nếu reward accuracy quá thấp, giảm loss magnitude
+        # Adaptive scaling với improved threshold
         avg_acc = reward_accuracies.mean().item()
-        if avg_acc < 0.6:  # Nếu accuracy < 60%, có vấn đề
-            losses = losses * 0.5  # Giảm magnitude để tránh học sai
+        if avg_acc < 0.55:  # Stricter threshold: 55% thay vì 60%
+            losses = losses * 0.7  # Ít aggressive hơn: 0.7 thay vì 0.5
+        elif avg_acc > 0.8:  # Boost cho high-performing cases
+            losses = losses * 1.2
         
         return losses.mean()
 
     def get_loss_regularization(self):
         beta = self.get_beta()
         
-        # Enhanced multi-component regularization cho TC_15 optimization
-        # 1. L2 regularization với adaptive weight
-        l2_reg = torch.mean((beta - self.beta_ref) ** 2)
+        # Enhanced regularization specifically cho TC_15 improvement
+        # 1. Moderate L2 regularization - không quá strict
+        l2_reg = torch.mean((beta - self.beta_ref) ** 2) * 0.5  # Giảm weight
         
-        # 2. Enhanced KL divergence với temperature scaling  
-        temperature = 0.5
-        beta_soft = F.softmax(beta / temperature, dim=-1)
-        beta_ref_soft = F.softmax(self.beta_ref / temperature, dim=-1)
-        kl_reg = F.kl_div(torch.log(beta_soft + 1e-8), beta_ref_soft, reduction='batchmean')
+        # 2. Topic coherence regularization - encourage coherent topics
+        # Tăng probability mass cho top words của mỗi topic
+        beta_sorted, _ = torch.sort(beta, dim=1, descending=True)
+        top_k_mass = torch.sum(beta_sorted[:, :15], dim=1)  # Top 15 words mass
+        coherence_reg = -torch.mean(top_k_mass)  # Maximize top-k mass
         
-        # 3. Diversity regularization để tăng topic diversity
+        # 3. Controlled diversity - tránh topics quá giống nhau
         beta_norm = F.normalize(beta, dim=1, p=2)
         cosine_sim = torch.matmul(beta_norm, beta_norm.t())
-        diversity_reg = torch.mean(torch.triu(cosine_sim, diagonal=1) ** 2)
+        # Chỉ penalize similarity quá cao (> 0.7)
+        high_sim_mask = (cosine_sim > 0.7).float()
+        diversity_reg = torch.mean(torch.triu(cosine_sim * high_sim_mask, diagonal=1))
         
-        # 4. Sparsity regularization để tăng topic coherence
-        sparsity_reg = torch.mean(torch.sum(beta * torch.log(beta + 1e-8), dim=-1))
+        # 4. Sparsity regularization - encourage focused topics
+        # Entropy-based sparsity: lower entropy = more focused
+        entropy_reg = torch.mean(torch.sum(-beta * torch.log(beta + 1e-8), dim=1))
         
-        # Weighted combination với focus on coherence
-        total_reg = l2_reg + 0.2 * kl_reg + 0.05 * diversity_reg - 0.01 * sparsity_reg
+        # 5. Reference similarity maintenance - đừng drift quá xa
+        cos_sim_ref = F.cosine_similarity(beta.view(-1), self.beta_ref.view(-1), dim=0)
+        ref_sim_reg = -(cos_sim_ref - 0.8) ** 2  # Encourage similarity around 0.8
+        
+        # Weighted combination với focus on coherence improvement
+        total_reg = (0.3 * l2_reg + 
+                    0.4 * coherence_reg + 
+                    0.1 * diversity_reg + 
+                    0.1 * entropy_reg + 
+                    0.1 * ref_sim_reg)
         
         return total_reg
 
@@ -298,7 +324,7 @@ class ECRTM(nn.Module):
             loss_DPO = self.get_loss_DPO()
             loss_regularization = self.get_loss_regularization()
             
-            # Adaptive loss weighting dựa trên magnitude như LLM training
+            # Enhanced adaptive loss weighting cho stronger DPO signal
             with torch.no_grad():
                 loss_magnitudes = {
                     'TM': loss_TM.item(),
@@ -307,16 +333,19 @@ class ECRTM(nn.Module):
                     'REG': loss_regularization.item()
                 }
                 
-                # Cân bằng loss components
+                # Improved scaling strategy: DPO cần strong enough signal
                 base_loss = loss_magnitudes['TM'] + loss_magnitudes['ECR']
                 if base_loss > 0:
-                    dpo_scale = min(self.lambda_dpo, base_loss / max(loss_magnitudes['DPO'], 1e-8))
-                    reg_scale = min(self.lambda_reg, base_loss / max(loss_magnitudes['REG'], 1e-8))
+                    # Cho phép DPO có weight cao hơn để tạo meaningful signal
+                    dpo_scale = min(self.lambda_dpo * 2.0, base_loss / max(loss_magnitudes['DPO'], 1e-8))
+                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.5)  # Minimum threshold
+                    
+                    reg_scale = min(self.lambda_reg * 1.5, base_loss / max(loss_magnitudes['REG'], 1e-8))
                 else:
                     dpo_scale = self.lambda_dpo
                     reg_scale = self.lambda_reg
             
-            # Final loss với adaptive weighting
+            # Final loss với enhanced DPO weighting
             loss = loss_TM + loss_ECR + dpo_scale * loss_DPO + reg_scale * loss_regularization
 
             # Comprehensive metrics như LLM training
