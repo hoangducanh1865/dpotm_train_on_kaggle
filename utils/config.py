@@ -20,29 +20,35 @@ def add_model_argument(parser):
     parser.add_argument('--model', type=str, default='ECRTM')
     parser.add_argument('--num_topics', type=int, default=50)
     parser.add_argument('--num_groups', type=int, default=20)
-    parser.add_argument('--dropout', type=float, default=0.2)
-    parser.add_argument('--hidden_dim_1', type=int, default=384)
-    parser.add_argument('--hidden_dim_2', type=int, default=384)
-    parser.add_argument('--theta_temp', type=float, default=1.0)
-    parser.add_argument('--DT_alpha', type=float, default=3.0)
-    parser.add_argument('--TW_alpha', type=float, default=2.0)
+    parser.add_argument('--dropout', type=float, default=0.1)  # Giảm từ 0.2 → 0.1 để giữ lại nhiều thông tin hơn
+    parser.add_argument('--hidden_dim_1', type=int, default=512)  # Tăng từ 384 → 512 cho better representation
+    parser.add_argument('--hidden_dim_2', type=int, default=512)  # Tăng từ 384 → 512 cho better representation
+    parser.add_argument('--theta_temp', type=float, default=0.8)  # Giảm từ 1.0 → 0.8 cho sharper topic distribution
+    parser.add_argument('--DT_alpha', type=float, default=5.0)   # Tăng từ 4.0 → 5.0 cho stronger diversity regularization
+    parser.add_argument('--TW_alpha', type=float, default=4.0)   # Tăng từ 3.0 → 4.0 cho even better topic-word coherence
     
-    parser.add_argument('--weight_GR', type=float, default=1.)
-    parser.add_argument('--alpha_GR', type=float, default=5.)
-    parser.add_argument('--weight_InfoNCE', type=float, default=50.0) # [50.0, 100.0, 150.0]
-    parser.add_argument('--beta_temp', type=float, default=0.2)
-    parser.add_argument('--weight_ECR', type=float, default=100.0) # [100.0, 150.0, 1=200.0]
+    parser.add_argument('--weight_GR', type=float, default=2.0)  # Tăng từ 1.0 → 2.0 cho stronger group regularization
+    parser.add_argument('--alpha_GR', type=float, default=8.0)   # Tăng từ 5.0 → 8.0 cho better group clustering
+    parser.add_argument('--weight_InfoNCE', type=float, default=100.0) # Tăng từ 75.0 → 100.0 cho even stronger contrastive learning
+    parser.add_argument('--beta_temp', type=float, default=0.1)  # Giảm từ 0.15 → 0.1 cho much sharper topic distributions
+    parser.add_argument('--weight_ECR', type=float, default=250.0) # Tăng từ 150.0 → 250.0 cho much stronger embedding clustering
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
-    # Enhanced DPO parameters với giá trị tối ưu cho TC_15
-    parser.add_argument('--lambda_dpo', type=float, default=0.8,  # Tăng từ 0.5 lên 0.8 cho stronger preference learning
+    # Enhanced DPO parameters với giá trị aggressive hơn cho TC_15 target 0.50+
+    parser.add_argument('--lambda_dpo', type=float, default=1.8,  # Tăng từ 1.2 → 1.8 cho very strong preference learning
                         help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.01,  # Tăng từ 0.005 lên 0.01 cho better regularization  
+    parser.add_argument('--lambda_reg', type=float, default=0.03,  # Tăng từ 0.02 → 0.03 cho stronger regularization
                         help='Regularization loss weight')
-    parser.add_argument('--use_ipo', action='store_true', default=True,  # Enable IPO mặc định
+    parser.add_argument('--use_ipo', action='store_true', default=True,  # Keep IPO for stability
                         help='Use IPO loss instead of standard DPO for stable training')
-    parser.add_argument('--label_smoothing', type=float, default=0.1,  # Thêm label smoothing để giảm overfitting
+    parser.add_argument('--label_smoothing', type=float, default=0.25,  # Tăng từ 0.15 → 0.25 cho much better generalization
+                        help='Label smoothing for preference loss to reduce overfitting')
+    parser.add_argument('--lambda_reg', type=float, default=0.02,  # Tăng từ 0.01 → 0.02 cho stronger regularization
+                        help='Regularization loss weight')
+    parser.add_argument('--use_ipo', action='store_true', default=True,  # Keep IPO for stability
+                        help='Use IPO loss instead of standard DPO for stable training')
+    parser.add_argument('--label_smoothing', type=float, default=0.25,  # Tăng từ 0.15 → 0.25 cho much better generalization
                         help='Label smoothing for preference loss to reduce overfitting')
 
 def add_wete_argument(parser):
@@ -53,13 +59,13 @@ def add_wete_argument(parser):
 
 
 def add_training_argument(parser):
-    parser.add_argument('--epochs', type=int, default=500)
-    parser.add_argument('--finetune_epochs', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=200,
+    parser.add_argument('--epochs', type=int, default=600)  # Tăng từ 500 → 600 cho better convergence
+    parser.add_argument('--finetune_epochs', type=int, default=150) # Tăng từ 100 → 150 epochs cho better convergence
+    parser.add_argument('--batch_size', type=int, default=256,  # Tăng từ 200 → 256 cho stable gradients
                         help='batch size')
-    parser.add_argument('--lr', type=float, default=0.002,
+    parser.add_argument('--lr', type=float, default=0.0015,  # Giảm từ 0.002 → 0.0015 cho stable learning
                         help='learning rate')
-    parser.add_argument('--finetune_lr', type=float, default=0.001, # [0.0001, 0.0005, 0.001, 0.002]
+    parser.add_argument('--finetune_lr', type=float, default=0.001, # Giữ 0.001 cho balanced DPO learning
                         help='fine-tune learning rate')
     parser.add_argument('--device', type=str, default='cuda',
                         help='device to run the model, cuda or cpu')
@@ -67,7 +73,7 @@ def add_training_argument(parser):
     parser.add_argument('--lr_scheduler', type=str,
                         help='learning rate scheduler, dont use if not needed, \
                             currently support: step', default='StepLR')
-    parser.add_argument('--lr_step_size', type=int, default=75, # [75, 125]
+    parser.add_argument('--lr_step_size', type=int, default=100, # Tăng từ 75 → 100 cho smoother decay
                         help='step size for learning rate scheduler')
 
 def add_eval_argument(parser):
@@ -75,7 +81,7 @@ def add_eval_argument(parser):
 
 
 def add_checkpoint_argument(parser):
-    parser.add_argument('--checkpoint_path', type=str, default=cfg.CHECKPOINT_PATH,
+    parser.add_argument('--checkpoint_path', type=str, default=None,
                         help='Path to checkpoint file to resume training')
     
     
