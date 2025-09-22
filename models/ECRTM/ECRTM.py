@@ -189,10 +189,10 @@ class ECRTM(nn.Module):
 
             loss_ECR = self.get_loss_ECR()
             
-            lambda_ref = 1.0 # [0.01, 0.05, 0.1, 0.5, 1.0]
+            lambda_ref = 0.5 # [0.01, 0.05, 0.1, 0.5, 1.0]
             loss_DPO = self.get_loss_DPO()
             
-            lambda_reg = 0.01 # [0.001, 0.005, 0.01]
+            lambda_reg = 0.005 # [0.001, 0.005, 0.01]
             loss_regularization = self.get_loss_regularization()
             
             loss = loss_TM + loss_ECR + lambda_ref * loss_DPO + lambda_reg * loss_regularization

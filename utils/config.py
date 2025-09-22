@@ -29,9 +29,9 @@ def add_model_argument(parser):
     
     parser.add_argument('--weight_GR', type=float, default=1.)
     parser.add_argument('--alpha_GR', type=float, default=5.)
-    parser.add_argument('--weight_InfoNCE', type=float, default=50.)
+    parser.add_argument('--weight_InfoNCE', type=float, default=100.0) # [50.0, 100.0, 150.0]
     parser.add_argument('--beta_temp', type=float, default=0.2)
-    parser.add_argument('--weight_ECR', type=float, default=100.0)
+    parser.add_argument('--weight_ECR', type=float, default=150.0) # [100.0, 150.0, 1=200.0]
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
 
@@ -49,7 +49,7 @@ def add_training_argument(parser):
                         help='batch size')
     parser.add_argument('--lr', type=float, default=0.002,
                         help='learning rate')
-    parser.add_argument('--finetune_lr', type=float, default=0.002, # [0.0001, 0.0005, 0.001, 0.002]
+    parser.add_argument('--finetune_lr', type=float, default=0.001, # [0.0001, 0.0005, 0.001, 0.002]
                         help='fine-tune learning rate')
     parser.add_argument('--device', type=str, default='cuda',
                         help='device to run the model, cuda or cpu')
@@ -57,7 +57,7 @@ def add_training_argument(parser):
     parser.add_argument('--lr_scheduler', type=str,
                         help='learning rate scheduler, dont use if not needed, \
                             currently support: step', default='StepLR')
-    parser.add_argument('--lr_step_size', type=int, default=125,
+    parser.add_argument('--lr_step_size', type=int, default=75, # [75, 125]
                         help='step size for learning rate scheduler')
 
 def add_eval_argument(parser):
