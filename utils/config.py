@@ -35,7 +35,9 @@ def add_model_argument(parser):
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
-    # DPO parameters được điều chỉnh để KHÔNG làm hỏng TC_15
+    # DPO controls
+    parser.add_argument('--disable_dpo', action='store_true', default=False,
+                        help='Disable DPO loss completely during fine-tuning')
     parser.add_argument('--lambda_dpo', type=float, default=1.0,  # TĂNG MẠNH từ 0.3 → 1.0 để tạo stronger signal
                         help='DPO loss weight for preference learning')
     parser.add_argument('--lambda_reg', type=float, default=0.02,  # TĂNG từ 0.005 → 0.02 để enhance TC_15 regularization
@@ -54,7 +56,7 @@ def add_wete_argument(parser):
 
 def add_training_argument(parser):
     parser.add_argument('--epochs', type=int, default=500)  # Giữ 500 epochs cho stable training
-    parser.add_argument('--finetune_epochs', type=int, default=50) # GIẢM MẠNH từ 100 → 50 epochs để tránh hỏng coherence
+    parser.add_argument('--finetune_epochs', type=int, default=100) # GIẢM MẠNH từ 100 → 50 epochs để tránh hỏng coherence
     parser.add_argument('--batch_size', type=int, default=200,  # Giữ 200 cho stable gradients
                         help='batch size')
     parser.add_argument('--lr', type=float, default=0.002,  # Giữ 0.002 cho good learning

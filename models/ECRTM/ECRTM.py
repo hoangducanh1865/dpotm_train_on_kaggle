@@ -135,9 +135,13 @@ class ECRTM(nn.Module):
         self.beta_ref.requires_grad = False
     
     def get_loss_DPO(self):
+        # Short-circuit if DPO is disabled
+        if getattr(self, 'lambda_dpo', 0.0) <= 0:
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+        
         if self.preference_dataset is None:
             self.load_preference_dataset()
-            
+        
         beta = self.get_beta()
         
         # Enhanced preference pairing với quality control
@@ -316,7 +320,7 @@ class ECRTM(nn.Module):
             theta, loss_KL = self.encode(input['data'])
             beta = self.get_beta()
 
-            recon = F.softmax(self.decoder_bn(torch.matmul(theta, beta)), dim=-1)
+            recon = F.softmax(self.decoder_bn(torch.matmul(theta, beta)), dim='-1')
             recon_loss = -(bow * recon.log()).sum(axis=1).mean()
 
             loss_TM = recon_loss + loss_KL
@@ -339,12 +343,12 @@ class ECRTM(nn.Module):
                 base_loss = loss_magnitudes['TM'] + loss_magnitudes['ECR']
                 if base_loss > 0:
                     # Allow DPO to scale up to 3x lambda_dpo cho maximum impact
-                    dpo_scale = min(self.lambda_dpo * 3.0, base_loss / max(loss_magnitudes['DPO'], 1e-8))
-                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.8)  # Higher minimum threshold
+                    dpo_scale = min(self.lambda_dpo * 3.0, base_loss / max(loss_magnitudes['DPO'], 1e-8)) if self.lambda_dpo > 0 else 0.0
+                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.8) if self.lambda_dpo > 0 else 0.0
                     
                     reg_scale = min(self.lambda_reg * 2.0, base_loss / max(loss_magnitudes['REG'], 1e-8))
                 else:
-                    dpo_scale = self.lambda_dpo * 1.5  # Default boost
+                    dpo_scale = self.lambda_dpo * 1.5 if self.lambda_dpo > 0 else 0.0
                     reg_scale = self.lambda_reg * 1.5
             
             # Final loss với AGGRESSIVE DPO weighting
