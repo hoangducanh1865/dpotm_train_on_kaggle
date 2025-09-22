@@ -29,9 +29,8 @@ def test_dpo_fix():
         "--lambda_diversity", "0.1",
         "--use_ipo",
         
-        # Minimal training for testing
-        "--epochs", "2",  # Very short for testing
-        "--finetune_epochs", "2"
+        # Minimal training for testing (since checkpoint already loaded)
+        "--finetune_epochs", "5"  # Very short test for fix verification
     ]
     
     print("Running test command:")

@@ -19,7 +19,8 @@ def run_training_with_optimized_params():
         "--dataset", "BBC_new",  # Change this to your dataset
         "--num_topics", "50",
         "--device", "cuda",
-        "--use_pretrainWE"
+        "--use_pretrainWE",
+        "--finetune_epochs", "100"  # Only fine-tune 100 epochs after loading checkpoint
     ]
     
     # Optimized hyperparameters based on analysis
@@ -143,7 +144,8 @@ def run_hyperparameter_sweep():
             "--dataset", "BBC_new",
             "--num_topics", "50", 
             "--device", "cuda",
-            "--use_pretrainWE"
+            "--use_pretrainWE",
+            "--finetune_epochs", "100"  # Only fine-tune 100 epochs
         ]
         
         param_cmd = [
