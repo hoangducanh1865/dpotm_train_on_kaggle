@@ -89,7 +89,7 @@ class DPOFinetuner:
                 print(output_log)
                 self.logger.info(output_log)
             
-            if epoch 600:
+            if epoch == 600:
                 self.save_checkpoint(epoch)
 
     def test(self, input_data):
