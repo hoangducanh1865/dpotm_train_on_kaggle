@@ -4,7 +4,7 @@ import torch
 class Configs:
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    CHECKPOINT_PATH = 'rresults/ECRTM/BBC_new/2025-09-22_02-40-41/checkpoints/checkpoint_epoch_500.pth'
+    CHECKPOINT_PATH = 'results/ECRTM/WOS_vocab_5k/2025-09-22_00-04-35/checkpoints/checkpoint_epoch_500.pth'
     '''
     results/ECRTM/StackOverflow/2025-09-21_01-38-04/checkpoints/checkpoint_epoch_500.pth
     results/ECRTM/20NG/2025-09-21_23-00-30/checkpoints/checkpoint_epoch_500.pth
