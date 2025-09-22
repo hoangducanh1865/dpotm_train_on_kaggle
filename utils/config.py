@@ -36,9 +36,9 @@ def add_model_argument(parser):
                         default=True, help='Enable use_pretrainWE mode')
     
     # DPO parameters được điều chỉnh để KHÔNG làm hỏng TC_15
-    parser.add_argument('--lambda_dpo', type=float, default=0.3,  # Giảm MẠNH từ 1.0 → 0.3 để tránh overfitting
+    parser.add_argument('--lambda_dpo', type=float, default=1.0,  # TĂNG MẠNH từ 0.3 → 1.0 để tạo stronger signal
                         help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.005,  # Giảm từ 0.015 → 0.005 cho minimal regularization
+    parser.add_argument('--lambda_reg', type=float, default=0.02,  # TĂNG từ 0.005 → 0.02 để enhance TC_15 regularization
                         help='Regularization loss weight')
     parser.add_argument('--use_ipo', action='store_true', default=False,  # TẮT IPO vì có thể conflict với coherence
                         help='Use IPO loss instead of standard DPO for stable training')

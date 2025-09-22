@@ -149,24 +149,24 @@ class ECRTM(nn.Module):
                 w_plus_indices = data['w_plus_indices'] 
                 w_minus_indices = data['w_minus_indices']
                 
-                # Tạo pairs với quality control - tăng số lượng nhưng vẫn selective
+                # AGGRESSIVE pairing strategy cho stronger signal
                 min_pairs = min(len(w_plus_indices), len(w_minus_indices))
-                max_pairs_per_topic = min(20, min_pairs * 3)  # Tăng từ 10 → 20
+                max_pairs_per_topic = min(40, min_pairs * 5)  # TĂNG từ 20 → 40 pairs
                 
-                # Strategy 1: Best vs Worst pairing cho strong signal
-                for i in range(min(5, min_pairs)):
+                # Strategy 1: Best vs Worst pairing - TĂNG số lượng
+                for i in range(min(10, min_pairs)):  # TĂNG từ 5 → 10
                     w_plus_idx = w_plus_indices[i]  # Top words
                     w_minus_idx = w_minus_indices[-(i+1)]  # Bottom words
                     self.preference_cache.append((k, w_plus_idx, w_minus_idx))
                 
                 # Strategy 2: Random balanced pairing cho diversity
-                for i in range(5, max_pairs_per_topic):
+                for i in range(10, max_pairs_per_topic):  # Tăng range
                     w_plus_idx = w_plus_indices[i % len(w_plus_indices)]
                     w_minus_idx = w_minus_indices[i % len(w_minus_indices)]
                     self.preference_cache.append((k, w_plus_idx, w_minus_idx))
         
-        # Enhanced batch processing với quality filtering
-        batch_size = min(512, len(self.preference_cache))  # Tăng từ 256 → 512
+        # AGGRESSIVE batch processing để force learning
+        batch_size = min(768, len(self.preference_cache))  # TĂNG từ 512 → 768 cho more data per batch
         if len(self.preference_cache) > batch_size:
             # Weighted sampling: ưu tiên pairs với high confidence
             import random
@@ -180,8 +180,8 @@ class ECRTM(nn.Module):
         ref_chosen_logps = []
         ref_rejected_logps = []
         
-        # Optimized temperature cho better signal
-        temperature = 0.3  # Giảm từ 0.5 → 0.3 cho stronger signal nhưng vẫn stable
+        # AGGRESSIVE DPO mode với stronger temperature
+        temperature = 0.2  # GIẢM từ 0.3 → 0.2 cho sharper, stronger signal
         
         for k, w_plus_idx, w_minus_idx in batch_preferences:
             # Policy logps với temperature scaling
@@ -237,12 +237,14 @@ class ECRTM(nn.Module):
         self.reward_accuracies = reward_accuracies.cpu().numpy().tolist()
         self.reward_margins = (chosen_rewards - rejected_rewards).cpu().numpy().tolist()
         
-        # Adaptive scaling với improved threshold
+        # AGGRESSIVE adaptive scaling với stricter thresholds
         avg_acc = reward_accuracies.mean().item()
-        if avg_acc < 0.55:  # Stricter threshold: 55% thay vì 60%
-            losses = losses * 0.7  # Ít aggressive hơn: 0.7 thay vì 0.5
-        elif avg_acc > 0.8:  # Boost cho high-performing cases
-            losses = losses * 1.2
+        if avg_acc < 0.5:  # Very poor performance - STRICTER threshold
+            losses = losses * 0.5  # Reduce significantly  
+        elif avg_acc > 0.7:  # Good performance - LOWER threshold
+            losses = losses * 1.5  # AMPLIFY more aggressively
+        elif avg_acc > 0.9:  # Excellent performance
+            losses = losses * 2.0  # MAXIMUM amplification
         
         return losses.mean()
 
@@ -324,7 +326,7 @@ class ECRTM(nn.Module):
             loss_DPO = self.get_loss_DPO()
             loss_regularization = self.get_loss_regularization()
             
-            # Enhanced adaptive loss weighting cho stronger DPO signal
+            # AGGRESSIVE loss weighting cho maximum DPO impact
             with torch.no_grad():
                 loss_magnitudes = {
                     'TM': loss_TM.item(),
@@ -333,19 +335,19 @@ class ECRTM(nn.Module):
                     'REG': loss_regularization.item()
                 }
                 
-                # Improved scaling strategy: DPO cần strong enough signal
+                # MAXIMUM DPO scaling strategy
                 base_loss = loss_magnitudes['TM'] + loss_magnitudes['ECR']
                 if base_loss > 0:
-                    # Cho phép DPO có weight cao hơn để tạo meaningful signal
-                    dpo_scale = min(self.lambda_dpo * 2.0, base_loss / max(loss_magnitudes['DPO'], 1e-8))
-                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.5)  # Minimum threshold
+                    # Allow DPO to scale up to 3x lambda_dpo cho maximum impact
+                    dpo_scale = min(self.lambda_dpo * 3.0, base_loss / max(loss_magnitudes['DPO'], 1e-8))
+                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.8)  # Higher minimum threshold
                     
-                    reg_scale = min(self.lambda_reg * 1.5, base_loss / max(loss_magnitudes['REG'], 1e-8))
+                    reg_scale = min(self.lambda_reg * 2.0, base_loss / max(loss_magnitudes['REG'], 1e-8))
                 else:
-                    dpo_scale = self.lambda_dpo
-                    reg_scale = self.lambda_reg
+                    dpo_scale = self.lambda_dpo * 1.5  # Default boost
+                    reg_scale = self.lambda_reg * 1.5
             
-            # Final loss với enhanced DPO weighting
+            # Final loss với AGGRESSIVE DPO weighting
             loss = loss_TM + loss_ECR + dpo_scale * loss_DPO + reg_scale * loss_regularization
 
             # Comprehensive metrics như LLM training
