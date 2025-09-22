@@ -2,11 +2,22 @@
 
 ## 📊 **Mục tiêu**: Tăng TC_15 từ 0.40 → 0.48-0.50 
 
-## ⚠️ **Problem Analysis**: 
-**Trước đây**: TC_15 = 0.40197 (giảm thay vì tăng)  
-**Nguyên nhân**: Parameters quá aggressive làm hỏng topic coherence
+# 🎯 Enhanced DPO Implementation cho TC_15 Improvement
 
-## 🔧 **BALANCED HYPERPARAMETER STRATEGY**:Enhanced DPO Implementation cho TC_15 Improvement
+## 📊 **Mục tiêu**: Tăng TC_15 từ 0.43249 → 0.45-0.47 
+
+## ⚠️ **Critical Problem Analysis**: 
+**Trước DPO**: TC_15 = 0.43249 (acceptable base)  
+**Sau DPO**: TC_15 = 0.42467 (GIẢM thay vì tăng!)
+**Root Cause**: DPO fine-tuning đang làm HỎI topic coherence
+
+## � **NEW STRATEGY - MINIMAL DPO INTERFERENCE**:
+
+### **Key Insight**: DPO đang conflict với topic coherence!
+- **Solution**: Làm DPO cực kỳ gentle để không hỏng base model
+- **Focus**: Tăng TC_15 ở base training, DPO chỉ làm minimal adjustment
+
+## 🔧 **CONSERVATIVE DPO STRATEGY**:Enhanced DPO Implementation cho TC_15 Improvement
 
 ## 📊 **Mục tiêu**: Tăng TC_15 từ 0.43368 → 0.50+ 
 
