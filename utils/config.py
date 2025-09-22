@@ -34,6 +34,16 @@ def add_model_argument(parser):
     parser.add_argument('--weight_ECR', type=float, default=100.0) # [100.0, 150.0, 1=200.0]
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
+    
+    # Enhanced DPO parameters với giá trị tối ưu cho TC_15
+    parser.add_argument('--lambda_dpo', type=float, default=0.8,  # Tăng từ 0.5 lên 0.8 cho stronger preference learning
+                        help='DPO loss weight for preference learning')
+    parser.add_argument('--lambda_reg', type=float, default=0.01,  # Tăng từ 0.005 lên 0.01 cho better regularization  
+                        help='Regularization loss weight')
+    parser.add_argument('--use_ipo', action='store_true', default=True,  # Enable IPO mặc định
+                        help='Use IPO loss instead of standard DPO for stable training')
+    parser.add_argument('--label_smoothing', type=float, default=0.1,  # Thêm label smoothing để giảm overfitting
+                        help='Label smoothing for preference loss to reduce overfitting')
 
 def add_wete_argument(parser):
     parser.add_argument('--glove', type=str, default='glove.6B.100d.txt', help='embedding model name')
@@ -65,7 +75,7 @@ def add_eval_argument(parser):
 
 
 def add_checkpoint_argument(parser):
-    parser.add_argument('--checkpoint_path', type=str, default=None,
+    parser.add_argument('--checkpoint_path', type=str, default=cfg.CHECKPOINT_PATH,
                         help='Path to checkpoint file to resume training')
     
     

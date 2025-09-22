@@ -28,19 +28,12 @@ class BasicTrainer:
         self.logger = logging.getLogger('main')
 
     def make_optimizer(self):
-        # Use enhanced optimizer for ECRTM models
-        if hasattr(self.model, 'get_optimizer'):
-            # Use the model's enhanced optimizer with parameter-specific learning rates
-            optimizer = self.model.get_optimizer(lr=self.learning_rate)
-            print("✓ Using enhanced optimizer with parameter-specific learning rates")
-        else:
-            # Fallback to standard Adam optimizer for other models
-            args_dict = {
-                'params': self.model.parameters(),
-                'lr': self.learning_rate,
-            }
-            optimizer = torch.optim.Adam(**args_dict)
-        
+        args_dict = {
+            'params': self.model.parameters(),
+            'lr': self.learning_rate,
+        }
+
+        optimizer = torch.optim.Adam(**args_dict)
         return optimizer
 
     def make_lr_scheduler(self):
@@ -71,14 +64,7 @@ class BasicTrainer:
 
                 self.optimizer.zero_grad()
                 batch_loss.backward()
-                
-                # Enhanced gradient clipping for ECRTM models
-                if hasattr(self.model, 'apply_gradient_clipping'):
-                    self.model.apply_gradient_clipping(max_norm=1.0)
-                else:
-                    # Standard gradient clipping for other models
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                
+                # torch.nn.utils.clip_grad_norm_(self.model.parameters(), True)
                 self.optimizer.step()
 
                 for key in rst_dict:
@@ -95,36 +81,11 @@ class BasicTrainer:
 
             if verbose and epoch % self.log_interval == 0:
                 output_log = f'Epoch: {epoch:03d}'
-                
-                # Standard loss logging
                 for key in loss_rst_dict:
                     output_log += f' {key}: {loss_rst_dict[key] / data_size :.3f}'
-                
+
                 print(output_log)
                 self.logger.info(output_log)
-                
-                # Enhanced metrics logging for ECRTM models
-                if hasattr(self.model, 'get_metrics_for_logging'):
-                    enhanced_metrics = self.model.get_metrics_for_logging()
-                    
-                    # Log enhanced metrics
-                    metrics_log = "Enhanced Metrics: "
-                    for key, value in enhanced_metrics.items():
-                        if 'norm' not in key:  # Skip detailed parameter norms for console
-                            metrics_log += f"{key}: {value:.4f} "
-                    
-                    if len(metrics_log) > 20:  # Only log if there are metrics
-                        print(f"  {metrics_log}")
-                        self.logger.info(f"  {metrics_log}")
-                    
-                    # Log to wandb if available
-                    try:
-                        import wandb
-                        wandb_metrics = {f"train/{key}": loss_rst_dict[key] / data_size for key in loss_rst_dict}
-                        wandb_metrics.update({f"enhanced/{key}": value for key, value in enhanced_metrics.items()})
-                        wandb.log(wandb_metrics, step=epoch)
-                    except:
-                        pass  # wandb logging is optional
             
             if epoch == 400 or epoch == 500:
                 self.save_checkpoint(epoch)

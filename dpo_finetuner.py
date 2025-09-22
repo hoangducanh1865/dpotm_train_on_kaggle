@@ -71,25 +71,27 @@ class DPOFinetuner:
 
                 for key in rst_dict:
                     try:
-                        # Only accumulate scalar values (losses), skip complex metrics
-                        if isinstance(rst_dict[key], torch.Tensor) and rst_dict[key].dim() == 0:
-                            loss_rst_dict[key] += rst_dict[key].item() * len(batch_data['data'])
-                        elif isinstance(rst_dict[key], (int, float)):
-                            loss_rst_dict[key] += rst_dict[key] * len(batch_data['data'])
-                        else:
-                            # For non-scalar values (like accuracy, margin), store latest value
-                            loss_rst_dict[key] = rst_dict[key]
+                        batch_size_val = len(batch_data['data'])
                     except:
-                        try:
-                            if isinstance(rst_dict[key], torch.Tensor) and rst_dict[key].dim() == 0:
-                                loss_rst_dict[key] += rst_dict[key].item() * len(batch_data)
-                            elif isinstance(rst_dict[key], (int, float)):
-                                loss_rst_dict[key] += rst_dict[key] * len(batch_data)
+                        batch_size_val = len(batch_data)
+                    
+                    # Handle both scalar and dict values
+                    if isinstance(rst_dict[key], dict):
+                        if key not in loss_rst_dict:
+                            loss_rst_dict[key] = {}
+                        for sub_key, sub_val in rst_dict[key].items():
+                            if sub_key not in loss_rst_dict[key]:
+                                loss_rst_dict[key][sub_key] = 0.0
+                            if isinstance(sub_val, torch.Tensor):
+                                loss_rst_dict[key][sub_key] += sub_val.item() * batch_size_val
                             else:
-                                loss_rst_dict[key] = rst_dict[key]
-                        except:
-                            # Skip problematic keys
-                            continue
+                                loss_rst_dict[key][sub_key] += float(sub_val) * batch_size_val
+                    else:
+                        # Handle scalar values
+                        if isinstance(rst_dict[key], torch.Tensor):
+                            loss_rst_dict[key] += rst_dict[key].item() * batch_size_val
+                        else:
+                            loss_rst_dict[key] += float(rst_dict[key]) * batch_size_val
 
             # for key in loss_rst_dict:
                 # wandb.log({key: loss_rst_dict[key] / data_size})
@@ -99,16 +101,13 @@ class DPOFinetuner:
             if verbose and epoch % self.log_interval == 0:
                 output_log = f'Epoch: {epoch:03d}'
                 for key in loss_rst_dict:
-                    try:
-                        if isinstance(loss_rst_dict[key], (int, float)):
-                            output_log += f' {key}: {loss_rst_dict[key] / data_size :.3f}'
-                        elif isinstance(loss_rst_dict[key], torch.Tensor) and loss_rst_dict[key].dim() == 0:
-                            output_log += f' {key}: {loss_rst_dict[key].item() / data_size :.3f}'
-                        else:
-                            # For non-scalar values, show as-is
-                            output_log += f' {key}: {loss_rst_dict[key]}'
-                    except:
-                        continue
+                    if isinstance(loss_rst_dict[key], dict):
+                        # Handle dict metrics
+                        for sub_key, sub_val in loss_rst_dict[key].items():
+                            output_log += f' {key}_{sub_key}: {sub_val / data_size :.3f}'
+                    else:
+                        # Handle scalar metrics
+                        output_log += f' {key}: {loss_rst_dict[key] / data_size :.3f}'
 
                 print(output_log)
                 self.logger.info(output_log)
