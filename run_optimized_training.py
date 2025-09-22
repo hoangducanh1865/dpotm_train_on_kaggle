@@ -102,7 +102,7 @@ def run_hyperparameter_sweep():
         base_cmd = [
             sys.executable, "main.py",
             "--model", "ECRTM",
-            "--dataset", "20NG",
+            "--dataset", "BBC_new",
             "--num_topics", "50", 
             "--device", "cuda",
             "--use_pretrainWE"
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run optimized ECRTM training")
     parser.add_argument("--sweep", action="store_true", 
                        help="Run hyperparameter sweep with multiple configurations")
-    parser.add_argument("--dataset", type=str, default="20NG",
+    parser.add_argument("--dataset", type=str, default="BBC_new",
                        help="Dataset to use (20NG, BBC_new, WOS_vocab_5k, etc.)")
     
     args = parser.parse_args()
