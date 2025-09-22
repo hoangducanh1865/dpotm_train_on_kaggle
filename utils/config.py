@@ -29,9 +29,9 @@ def add_model_argument(parser):
     
     parser.add_argument('--weight_GR', type=float, default=1.)
     parser.add_argument('--alpha_GR', type=float, default=5.)
-    parser.add_argument('--weight_InfoNCE', type=float, default=100.0) # [50.0, 100.0, 150.0]
+    parser.add_argument('--weight_InfoNCE', type=float, default=50.0) # [50.0, 100.0, 150.0]
     parser.add_argument('--beta_temp', type=float, default=0.2)
-    parser.add_argument('--weight_ECR', type=float, default=150.0) # [100.0, 150.0, 1=200.0]
+    parser.add_argument('--weight_ECR', type=float, default=100.0) # [100.0, 150.0, 1=200.0]
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
 
