@@ -255,25 +255,25 @@ class ECRTM(nn.Module):
                 w_plus_indices = data['w_plus_indices'] 
                 w_minus_indices = data['w_minus_indices']
                 
-                # COHERENCE-FIRST strategy: Focus on top coherent words
+                # AGGRESSIVE COHERENCE-FIRST strategy: More pairs for stronger signal
                 min_pairs = min(len(w_plus_indices), len(w_minus_indices))
-                max_pairs_per_topic = min(15, min_pairs)  # REDUCE pairs để focus on quality
+                max_pairs_per_topic = min(25, min_pairs)  # INCREASE from 15 to 25 pairs
                 
-                # Strategy 1: TOP vs BOTTOM pairing (coherence-focused)
-                for i in range(min(8, min_pairs)):  # Top 8 most confident pairs only
+                # Strategy 1: TOP vs BOTTOM pairing (coherence-focused) - MORE pairs
+                for i in range(min(12, min_pairs)):  # INCREASE from 8 to 12 confident pairs
                     w_plus_idx = w_plus_indices[i]  # Highly preferred words
                     w_minus_idx = w_minus_indices[-(i+1)]  # Clearly rejected words
                     self.preference_cache.append((k, w_plus_idx, w_minus_idx))
                 
-                # Strategy 2: HIGH vs MEDIUM pairing (nuanced preferences)
-                for i in range(8, max_pairs_per_topic):
-                    w_plus_idx = w_plus_indices[i % min(len(w_plus_indices), 15)]  # Top 15 only
-                    w_minus_idx = w_minus_indices[i % min(len(w_minus_indices), 15)]  # Bottom 15 only
+                # Strategy 2: HIGH vs MEDIUM pairing (nuanced preferences) - MORE coverage
+                for i in range(12, max_pairs_per_topic):
+                    w_plus_idx = w_plus_indices[i % min(len(w_plus_indices), 20)]  # Top 20 (vs 15)
+                    w_minus_idx = w_minus_indices[i % min(len(w_minus_indices), 20)]  # Bottom 20 (vs 15)
                     if w_plus_idx != w_minus_idx:  # Avoid same word pairs
                         self.preference_cache.append((k, w_plus_idx, w_minus_idx))
         
-        # MODERATE batch processing for stable learning
-        batch_size = min(256, len(self.preference_cache))  # REDUCE from 768 to 256
+        # MORE AGGRESSIVE batch processing for stronger learning
+        batch_size = min(400, len(self.preference_cache))  # INCREASE from 256 to 400
         if len(self.preference_cache) > batch_size:
             # Prioritize high-confidence pairs
             import random
@@ -288,8 +288,8 @@ class ECRTM(nn.Module):
         ref_chosen_logps = []
         ref_rejected_logps = []
         
-        # COHERENCE-OPTIMIZED temperature
-        temperature = 0.5  # INCREASE from 0.2 to 0.5 for smoother, more stable learning
+        # AGGRESSIVE COHERENCE-OPTIMIZED temperature
+        temperature = 0.4  # DECREASE from 0.5 to 0.4 for sharper, more aggressive learning
         
         for k, w_plus_idx, w_minus_idx in batch_preferences:
             # Policy logps với coherence-aware temperature
@@ -338,12 +338,14 @@ class ECRTM(nn.Module):
         self.reward_accuracies = reward_accuracies.cpu().numpy().tolist()
         self.reward_margins = (chosen_rewards - rejected_rewards).cpu().numpy().tolist()
         
-        # COHERENCE-ADAPTIVE scaling
+        # MORE AGGRESSIVE COHERENCE-ADAPTIVE scaling
         avg_acc = reward_accuracies.mean().item()
-        if avg_acc < 0.55:  # Poor performance - reduce impact
-            losses = losses * 0.7
-        elif avg_acc > 0.75:  # Good performance - moderate boost
-            losses = losses * 1.2  # REDUCE from 1.5 to 1.2
+        if avg_acc < 0.5:  # Poor performance - moderate reduction
+            losses = losses * 0.8  # LESS reduction (0.8 vs 0.7)
+        elif avg_acc > 0.65:  # Good performance - stronger boost
+            losses = losses * 1.4  # INCREASE from 1.2 to 1.4
+        elif avg_acc > 0.8:  # Excellent performance - maximum boost
+            losses = losses * 1.8  # NEW: Maximum aggressive scaling
         
         return losses.mean()
 
@@ -377,10 +379,10 @@ class ECRTM(nn.Module):
         off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
         diversity_penalty = torch.mean(topic_similarity_matrix * high_sim_mask * off_diagonal_mask)
         
-        # COHERENCE-OPTIMIZED weighting - focus on TC_15 improvement
-        total_reg = (0.5 * coherence_reg +        # MAXIMIZE top-15 mass (most important)
-                    0.3 * smoothness_reg +       # Maintain reference similarity  
-                    0.15 * sparsity_reg +        # Encourage topic focus
+        # AGGRESSIVE COHERENCE-OPTIMIZED weighting - maximize TC_15 improvement
+        total_reg = (0.6 * coherence_reg +        # INCREASE top-15 focus (0.5→0.6)
+                    0.25 * smoothness_reg +       # Maintain reference similarity  
+                    0.1 * sparsity_reg +         # Encourage topic focus
                     -0.05 * diversity_penalty)   # Prevent topic collapse (small penalty)
         
         return total_reg
@@ -435,17 +437,17 @@ class ECRTM(nn.Module):
                     'REG': loss_regularization.item()
                 }
                 
-                # MODERATE DPO scaling to preserve topic structure
+                # MORE AGGRESSIVE DPO scaling for higher TC_15
                 base_loss = loss_magnitudes['TM'] + loss_magnitudes['ECR']
                 if base_loss > 0 and self.lambda_dpo > 0:
-                    # Allow DPO to be meaningful but not overwhelming
-                    dpo_scale = min(self.lambda_dpo * 2.0, base_loss / max(loss_magnitudes['DPO'], 1e-8)) if self.lambda_dpo > 0 else 0.0
-                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.5) if self.lambda_dpo > 0 else 0.0
+                    # Allow DPO to be more impactful for TC_15 improvement
+                    dpo_scale = min(self.lambda_dpo * 2.5, base_loss / max(loss_magnitudes['DPO'], 1e-8)) if self.lambda_dpo > 0 else 0.0
+                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.7) if self.lambda_dpo > 0 else 0.0  # Higher minimum
                     
-                    reg_scale = min(self.lambda_reg * 1.5, base_loss / max(loss_magnitudes['REG'], 1e-8))
+                    reg_scale = min(self.lambda_reg * 2.0, base_loss / max(loss_magnitudes['REG'], 1e-8))  # More reg
                 else:
-                    dpo_scale = self.lambda_dpo if self.lambda_dpo > 0 else 0.0
-                    reg_scale = self.lambda_reg
+                    dpo_scale = self.lambda_dpo * 1.2 if self.lambda_dpo > 0 else 0.0  # Higher baseline
+                    reg_scale = self.lambda_reg * 1.2
             
             # COHERENCE-AWARE final loss
             loss = loss_TM + loss_ECR + dpo_scale * loss_DPO + reg_scale * loss_regularization

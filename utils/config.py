@@ -35,12 +35,12 @@ def add_model_argument(parser):
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
-    # DPO controls - REDESIGNED for topic coherence optimization
+    # DPO controls - MORE AGGRESSIVE for higher TC_15
     parser.add_argument('--disable_dpo', action='store_true', default=False,
                         help='Disable DPO loss completely during fine-tuning')
-    parser.add_argument('--lambda_dpo', type=float, default=0.3,  # MODERATE weight for topic-aware DPO
+    parser.add_argument('--lambda_dpo', type=float, default=0.5,  # INCREASE for more aggressive DPO
                         help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.1,  # STRONGER coherence regularization
+    parser.add_argument('--lambda_reg', type=float, default=0.15,  # STRONGER coherence regularization
                         help='Regularization loss weight')
     parser.add_argument('--use_ipo', action='store_true', default=True,  # Enable IPO for stable training
                         help='Use IPO loss instead of standard DPO for stable training')
@@ -56,7 +56,7 @@ def add_wete_argument(parser):
 
 def add_training_argument(parser):
     parser.add_argument('--epochs', type=int, default=500)  # Keep 500 epochs for stable base training
-    parser.add_argument('--finetune_epochs', type=int, default=30) # REDUCE to 30 epochs for gentle fine-tuning
+    parser.add_argument('--finetune_epochs', type=int, default=100) # REDUCE to 100 epochs for gentle fine-tuning
     parser.add_argument('--batch_size', type=int, default=200,  # Keep 200 for stable gradients
                         help='batch size')
     parser.add_argument('--lr', type=float, default=0.002,  # Keep base learning rate
