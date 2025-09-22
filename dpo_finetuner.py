@@ -66,7 +66,8 @@ class DPOFinetuner:
 
                 self.optimizer.zero_grad()
                 batch_loss.backward()
-                # torch.nn.utils.clip_grad_norm_(self.model.parameters(), True)
+                # Gradient clipping để tránh instability trong fine-tuning
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.optimizer.step()
 
                 for key in rst_dict:
@@ -111,6 +112,15 @@ class DPOFinetuner:
 
                 print(output_log)
                 self.logger.info(output_log)
+                
+                # Log gradient norms để monitor stability
+                total_norm = 0
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_norm += param_norm.item() ** 2
+                total_norm = total_norm ** (1. / 2)
+                self.logger.info(f'Gradient norm: {total_norm:.6f}')
             
             if epoch == 600:
                 self.save_checkpoint(epoch)
