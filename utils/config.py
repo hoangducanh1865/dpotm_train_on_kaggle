@@ -35,16 +35,16 @@ def add_model_argument(parser):
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
-    # DPO controls
+    # DPO controls - REDESIGNED for topic coherence optimization
     parser.add_argument('--disable_dpo', action='store_true', default=False,
                         help='Disable DPO loss completely during fine-tuning')
-    parser.add_argument('--lambda_dpo', type=float, default=0.0,  # TẮT DPO hoàn toàn để preserve TC_15
+    parser.add_argument('--lambda_dpo', type=float, default=0.3,  # MODERATE weight for topic-aware DPO
                         help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.02,  # TĂNG từ 0.005 → 0.02 để enhance TC_15 regularization
+    parser.add_argument('--lambda_reg', type=float, default=0.1,  # STRONGER coherence regularization
                         help='Regularization loss weight')
-    parser.add_argument('--use_ipo', action='store_true', default=False,  # TẮT IPO vì có thể conflict với coherence
+    parser.add_argument('--use_ipo', action='store_true', default=True,  # Enable IPO for stable training
                         help='Use IPO loss instead of standard DPO for stable training')
-    parser.add_argument('--label_smoothing', type=float, default=0.05,  # Giảm từ 0.1 → 0.05 cho minimal smoothing
+    parser.add_argument('--label_smoothing', type=float, default=0.0,  # NO smoothing for sharp preferences
                         help='Label smoothing for preference loss to reduce overfitting')
 
 def add_wete_argument(parser):
@@ -55,13 +55,13 @@ def add_wete_argument(parser):
 
 
 def add_training_argument(parser):
-    parser.add_argument('--epochs', type=int, default=500)  # Giữ 500 epochs cho stable training
-    parser.add_argument('--finetune_epochs', type=int, default=100) # GIẢM MẠNH từ 100 → 50 epochs để tránh hỏng coherence
-    parser.add_argument('--batch_size', type=int, default=200,  # Giữ 200 cho stable gradients
+    parser.add_argument('--epochs', type=int, default=500)  # Keep 500 epochs for stable base training
+    parser.add_argument('--finetune_epochs', type=int, default=30) # REDUCE to 30 epochs for gentle fine-tuning
+    parser.add_argument('--batch_size', type=int, default=200,  # Keep 200 for stable gradients
                         help='batch size')
-    parser.add_argument('--lr', type=float, default=0.002,  # Giữ 0.002 cho good learning
+    parser.add_argument('--lr', type=float, default=0.002,  # Keep base learning rate
                         help='learning rate')
-    parser.add_argument('--finetune_lr', type=float, default=0.0005, # GIẢM từ 0.001 → 0.0005 cho gentle fine-tuning
+    parser.add_argument('--finetune_lr', type=float, default=0.0003, # REDUCE for very gentle fine-tuning
                         help='fine-tune learning rate')
     parser.add_argument('--device', type=str, default='cuda',
                         help='device to run the model, cuda or cpu')
@@ -69,7 +69,7 @@ def add_training_argument(parser):
     parser.add_argument('--lr_scheduler', type=str,
                         help='learning rate scheduler, dont use if not needed, \
                             currently support: step', default='StepLR')
-    parser.add_argument('--lr_step_size', type=int, default=75, # Giữ 75 cho balanced decay
+    parser.add_argument('--lr_step_size', type=int, default=100, # Increase step size for gentler decay
                         help='step size for learning rate scheduler')
 
 def add_eval_argument(parser):

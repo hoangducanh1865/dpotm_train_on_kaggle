@@ -246,7 +246,7 @@ class ECRTM(nn.Module):
         
         beta = self.get_beta()
         
-        # Enhanced preference pairing với quality control
+        # REDESIGNED preference strategy: COHERENCE-FOCUSED pairing
         if self.preference_cache is None:
             self.preference_cache = []
             for line in self.preference_dataset:
@@ -255,28 +255,30 @@ class ECRTM(nn.Module):
                 w_plus_indices = data['w_plus_indices'] 
                 w_minus_indices = data['w_minus_indices']
                 
-                # AGGRESSIVE pairing strategy cho stronger signal
+                # COHERENCE-FIRST strategy: Focus on top coherent words
                 min_pairs = min(len(w_plus_indices), len(w_minus_indices))
-                max_pairs_per_topic = min(40, min_pairs * 5)  # TĂNG từ 20 → 40 pairs
+                max_pairs_per_topic = min(15, min_pairs)  # REDUCE pairs để focus on quality
                 
-                # Strategy 1: Best vs Worst pairing - TĂNG số lượng
-                for i in range(min(10, min_pairs)):  # TĂNG từ 5 → 10
-                    w_plus_idx = w_plus_indices[i]  # Top words
-                    w_minus_idx = w_minus_indices[-(i+1)]  # Bottom words
+                # Strategy 1: TOP vs BOTTOM pairing (coherence-focused)
+                for i in range(min(8, min_pairs)):  # Top 8 most confident pairs only
+                    w_plus_idx = w_plus_indices[i]  # Highly preferred words
+                    w_minus_idx = w_minus_indices[-(i+1)]  # Clearly rejected words
                     self.preference_cache.append((k, w_plus_idx, w_minus_idx))
                 
-                # Strategy 2: Random balanced pairing cho diversity
-                for i in range(10, max_pairs_per_topic):  # Tăng range
-                    w_plus_idx = w_plus_indices[i % len(w_plus_indices)]
-                    w_minus_idx = w_minus_indices[i % len(w_minus_indices)]
-                    self.preference_cache.append((k, w_plus_idx, w_minus_idx))
+                # Strategy 2: HIGH vs MEDIUM pairing (nuanced preferences)
+                for i in range(8, max_pairs_per_topic):
+                    w_plus_idx = w_plus_indices[i % min(len(w_plus_indices), 15)]  # Top 15 only
+                    w_minus_idx = w_minus_indices[i % min(len(w_minus_indices), 15)]  # Bottom 15 only
+                    if w_plus_idx != w_minus_idx:  # Avoid same word pairs
+                        self.preference_cache.append((k, w_plus_idx, w_minus_idx))
         
-        # AGGRESSIVE batch processing để force learning
-        batch_size = min(768, len(self.preference_cache))  # TĂNG từ 512 → 768 cho more data per batch
+        # MODERATE batch processing for stable learning
+        batch_size = min(256, len(self.preference_cache))  # REDUCE from 768 to 256
         if len(self.preference_cache) > batch_size:
-            # Weighted sampling: ưu tiên pairs với high confidence
+            # Prioritize high-confidence pairs
             import random
-            batch_indices = random.sample(range(len(self.preference_cache)), batch_size)
+            random.seed(42)  # Reproducible sampling
+            batch_indices = random.sample(range(min(len(self.preference_cache), batch_size*2)), batch_size)
             batch_preferences = [self.preference_cache[i] for i in batch_indices]
         else:
             batch_preferences = self.preference_cache
@@ -286,15 +288,15 @@ class ECRTM(nn.Module):
         ref_chosen_logps = []
         ref_rejected_logps = []
         
-        # AGGRESSIVE DPO mode với stronger temperature
-        temperature = 0.2  # GIẢM từ 0.3 → 0.2 cho sharper, stronger signal
+        # COHERENCE-OPTIMIZED temperature
+        temperature = 0.5  # INCREASE from 0.2 to 0.5 for smoother, more stable learning
         
         for k, w_plus_idx, w_minus_idx in batch_preferences:
-            # Policy logps với temperature scaling
+            # Policy logps với coherence-aware temperature
             chosen_logp = torch.log(torch.softmax(beta[k] / temperature, dim=0)[w_plus_idx] + 1e-8)
             rejected_logp = torch.log(torch.softmax(beta[k] / temperature, dim=0)[w_minus_idx] + 1e-8)
             
-            # Reference logps với cùng temperature
+            # Reference logps with same temperature
             ref_chosen_logp = torch.log(torch.softmax(self.beta_ref[k] / temperature, dim=0)[w_plus_idx] + 1e-8)
             ref_rejected_logp = torch.log(torch.softmax(self.beta_ref[k] / temperature, dim=0)[w_minus_idx] + 1e-8)
             
@@ -311,83 +313,75 @@ class ECRTM(nn.Module):
         ref_chosen_logps = torch.stack(ref_chosen_logps)
         ref_rejected_logps = torch.stack(ref_rejected_logps)
         
-        # Enhanced DPO loss với adaptive weighting
+        # COHERENCE-AWARE DPO loss
         pi_logratios = chosen_logps - rejected_logps
         ref_logratios = ref_chosen_logps - ref_rejected_logps
         logits = pi_logratios - ref_logratios
         
-        # Moderate clamping để preserve signal strength
-        logits = torch.clamp(logits, -5.0, 5.0)  # Giảm từ [-10,10] → [-5,5]
+        # GENTLE clamping to preserve topic structure
+        logits = torch.clamp(logits, -3.0, 3.0)  # REDUCE from [-5,5] to [-3,3]
         
         if self.use_ipo:
-            # IPO loss cho training ổn định hơn
+            # IPO loss: more stable and coherence-friendly
             losses = (logits - 1/(2 * self.lambda_dpo)) ** 2
         else:
-            # Enhanced DPO với confidence weighting
+            # Standard DPO with coherence weighting
             sigmoid_logits = F.logsigmoid(self.lambda_dpo * logits)
-            neg_sigmoid_logits = F.logsigmoid(-self.lambda_dpo * logits)
-            
-            # Confidence-weighted loss: stronger signal cho high-confidence pairs
-            confidence_weights = torch.abs(logits).detach()  # Higher weight cho clear preferences
-            confidence_weights = torch.clamp(confidence_weights, 0.5, 2.0)  # Normalize weights
-            
-            losses = (-sigmoid_logits * (1 - self.label_smoothing) - 
-                     neg_sigmoid_logits * self.label_smoothing) * confidence_weights
+            losses = -sigmoid_logits * (1 - self.label_smoothing) - F.logsigmoid(-self.lambda_dpo * logits) * self.label_smoothing
         
-        # Compute rewards cho monitoring
+        # Compute rewards for monitoring
         chosen_rewards = self.lambda_dpo * (chosen_logps - ref_chosen_logps).detach()
         rejected_rewards = self.lambda_dpo * (rejected_logps - ref_rejected_logps).detach()
         
-        # Enhanced metrics tracking
+        # Monitoring metrics
         reward_accuracies = (chosen_rewards > rejected_rewards).float()
         self.reward_accuracies = reward_accuracies.cpu().numpy().tolist()
         self.reward_margins = (chosen_rewards - rejected_rewards).cpu().numpy().tolist()
         
-        # AGGRESSIVE adaptive scaling với stricter thresholds
+        # COHERENCE-ADAPTIVE scaling
         avg_acc = reward_accuracies.mean().item()
-        if avg_acc < 0.5:  # Very poor performance - STRICTER threshold
-            losses = losses * 0.5  # Reduce significantly  
-        elif avg_acc > 0.7:  # Good performance - LOWER threshold
-            losses = losses * 1.5  # AMPLIFY more aggressively
-        elif avg_acc > 0.9:  # Excellent performance
-            losses = losses * 2.0  # MAXIMUM amplification
+        if avg_acc < 0.55:  # Poor performance - reduce impact
+            losses = losses * 0.7
+        elif avg_acc > 0.75:  # Good performance - moderate boost
+            losses = losses * 1.2  # REDUCE from 1.5 to 1.2
         
         return losses.mean()
 
     def get_loss_regularization(self):
+        if getattr(self, 'lambda_dpo', 0.0) <= 0:
+            return torch.tensor(0.0, device=self.device, requires_grad=True)
+            
         beta = self.get_beta()
         
-        # Enhanced regularization specifically cho TC_15 improvement
-        # 1. Moderate L2 regularization - không quá strict
-        l2_reg = torch.mean((beta - self.beta_ref) ** 2) * 0.5  # Giảm weight
-        
-        # 2. Topic coherence regularization - encourage coherent topics
-        # Tăng probability mass cho top words của mỗi topic
+        # COHERENCE-FIRST regularization strategy
+        # 1. Topic coherence regularization - encourage top-15 mass concentration
         beta_sorted, _ = torch.sort(beta, dim=1, descending=True)
-        top_k_mass = torch.sum(beta_sorted[:, :15], dim=1)  # Top 15 words mass
-        coherence_reg = -torch.mean(top_k_mass)  # Maximize top-k mass
+        top_15_mass = torch.sum(beta_sorted[:, :15], dim=1)  # Focus on TC_15 metric
+        coherence_reg = torch.mean(top_15_mass)  # MAXIMIZE top-15 concentration (positive reward)
         
-        # 3. Controlled diversity - tránh topics quá giống nhau
-        beta_norm = F.normalize(beta, dim=1, p=2)
-        cosine_sim = torch.matmul(beta_norm, beta_norm.t())
-        # Chỉ penalize similarity quá cao (> 0.7)
-        high_sim_mask = (cosine_sim > 0.7).float()
-        diversity_reg = torch.mean(torch.triu(cosine_sim * high_sim_mask, diagonal=1))
+        # 2. Smoothness regularization - prevent abrupt changes
+        beta_ref_norm = F.normalize(self.beta_ref, dim=1, p=2)
+        beta_norm = F.normalize(beta, dim=1, p=2) 
+        cosine_sim = torch.sum(beta_ref_norm * beta_norm, dim=1)  # Cosine similarity per topic
+        smoothness_reg = torch.mean(cosine_sim)  # MAXIMIZE similarity to reference
         
-        # 4. Sparsity regularization - encourage focused topics
-        # Entropy-based sparsity: lower entropy = more focused
-        entropy_reg = torch.mean(torch.sum(-beta * torch.log(beta + 1e-8), dim=1))
+        # 3. Sparsity regularization - encourage focused topics
+        # Use negative entropy: lower entropy = more focused = better
+        entropy = -torch.sum(beta * torch.log(beta + 1e-8), dim=1)
+        sparsity_reg = -torch.mean(entropy)  # MINIMIZE entropy (MAXIMIZE focus)
         
-        # 5. Reference similarity maintenance - đừng drift quá xa
-        cos_sim_ref = F.cosine_similarity(beta.view(-1), self.beta_ref.view(-1), dim=0)
-        ref_sim_reg = -(cos_sim_ref - 0.8) ** 2  # Encourage similarity around 0.8
+        # 4. Inter-topic diversity - prevent topic collapse
+        topic_similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
+        # Only penalize very high similarities (> 0.8)
+        high_sim_mask = (topic_similarity_matrix > 0.8).float()
+        off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
+        diversity_penalty = torch.mean(topic_similarity_matrix * high_sim_mask * off_diagonal_mask)
         
-        # Weighted combination với focus on coherence improvement
-        total_reg = (0.3 * l2_reg + 
-                    0.4 * coherence_reg + 
-                    0.1 * diversity_reg + 
-                    0.1 * entropy_reg + 
-                    0.1 * ref_sim_reg)
+        # COHERENCE-OPTIMIZED weighting - focus on TC_15 improvement
+        total_reg = (0.5 * coherence_reg +        # MAXIMIZE top-15 mass (most important)
+                    0.3 * smoothness_reg +       # Maintain reference similarity  
+                    0.15 * sparsity_reg +        # Encourage topic focus
+                    -0.05 * diversity_penalty)   # Prevent topic collapse (small penalty)
         
         return total_reg
 
@@ -432,7 +426,7 @@ class ECRTM(nn.Module):
             loss_DPO = self.get_loss_DPO()
             loss_regularization = self.get_loss_regularization()
             
-            # AGGRESSIVE loss weighting cho maximum DPO impact
+            # COHERENCE-OPTIMIZED loss weighting
             with torch.no_grad():
                 loss_magnitudes = {
                     'TM': loss_TM.item(),
@@ -441,19 +435,19 @@ class ECRTM(nn.Module):
                     'REG': loss_regularization.item()
                 }
                 
-                # MAXIMUM DPO scaling strategy
+                # MODERATE DPO scaling to preserve topic structure
                 base_loss = loss_magnitudes['TM'] + loss_magnitudes['ECR']
-                if base_loss > 0:
-                    # Allow DPO to scale up to 3x lambda_dpo cho maximum impact
-                    dpo_scale = min(self.lambda_dpo * 3.0, base_loss / max(loss_magnitudes['DPO'], 1e-8)) if self.lambda_dpo > 0 else 0.0
-                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.8) if self.lambda_dpo > 0 else 0.0
+                if base_loss > 0 and self.lambda_dpo > 0:
+                    # Allow DPO to be meaningful but not overwhelming
+                    dpo_scale = min(self.lambda_dpo * 2.0, base_loss / max(loss_magnitudes['DPO'], 1e-8)) if self.lambda_dpo > 0 else 0.0
+                    dpo_scale = max(dpo_scale, self.lambda_dpo * 0.5) if self.lambda_dpo > 0 else 0.0
                     
-                    reg_scale = min(self.lambda_reg * 2.0, base_loss / max(loss_magnitudes['REG'], 1e-8))
+                    reg_scale = min(self.lambda_reg * 1.5, base_loss / max(loss_magnitudes['REG'], 1e-8))
                 else:
-                    dpo_scale = self.lambda_dpo * 1.5 if self.lambda_dpo > 0 else 0.0
-                    reg_scale = self.lambda_reg * 1.5
+                    dpo_scale = self.lambda_dpo if self.lambda_dpo > 0 else 0.0
+                    reg_scale = self.lambda_reg
             
-            # Final loss với AGGRESSIVE DPO weighting
+            # COHERENCE-AWARE final loss
             loss = loss_TM + loss_ECR + dpo_scale * loss_DPO + reg_scale * loss_regularization
 
             # Comprehensive metrics như LLM training
