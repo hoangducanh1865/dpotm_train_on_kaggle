@@ -14,7 +14,10 @@ class ECRTM(nn.Module):
 
         Xiaobao Wu, Xinshuai Dong, Thong Thanh Nguyen, Anh Tuan Luu.
     '''
-    def __init__(self, vocab_size, num_topics=50, en_units=200, dropout=0., pretrained_WE=None, embed_size=200, beta_temp=0.2, weight_loss_ECR=100.0, sinkhorn_alpha=20.0, sinkhorn_max_iter=1000, current_run_dir=None):
+    def __init__(self, vocab_size, num_topics=50, en_units=200, dropout=0., pretrained_WE=None, embed_size=200, beta_temp=0.2, weight_loss_ECR=100.0, sinkhorn_alpha=20.0, sinkhorn_max_iter=1000, current_run_dir=None,
+                 # Enhanced DPO parameters for TC_15 improvement
+                 dpo_beta=0.1, lambda_dpo=0.8, lambda_reg=0.02, lambda_diversity=0.15, lambda_coherence=0.25,
+                 use_ipo=True, label_smoothing=0.05, batch_size_dpo=512, reference_free=False):
         super().__init__()
 
         self.is_finetuing = False
@@ -24,17 +27,16 @@ class ECRTM(nn.Module):
         self.beta_temp = beta_temp
         self.current_run_dir = current_run_dir
         
-        # DPO hyperparameters - optimized for better TC_15
-        self.dpo_beta = 0.1  # Lower beta for more stable training
-        self.label_smoothing = 0.05  # Conservative smoothing
-        self.use_ipo = True  # Use IPO for stability 
-        self.reference_free = False
-        
-        # Enhanced preference learning parameters
-        self.lambda_dpo = 0.8  # Increased DPO weight
-        self.lambda_reg = 0.01  # Increased regularization
-        self.lambda_diversity = 0.1  # Topic diversity weight
-        self.lambda_coherence = 0.05  # Topic coherence weight
+        # Enhanced DPO hyperparameters - optimized for better TC_15
+        self.dpo_beta = dpo_beta
+        self.lambda_dpo = lambda_dpo
+        self.lambda_reg = lambda_reg
+        self.lambda_diversity = lambda_diversity
+        self.lambda_coherence = lambda_coherence
+        self.use_ipo = use_ipo
+        self.label_smoothing = label_smoothing
+        self.batch_size_dpo = batch_size_dpo
+        self.reference_free = reference_free
         
         # Cached data
         self.beta_ref_path = None
