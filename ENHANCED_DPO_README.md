@@ -1,5 +1,13 @@
 # 🎯 Enhanced DPO Implementation cho TC_15 Improvement
 
+## 📊 **Mục tiêu**: Tăng TC_15 từ 0.40 → 0.48-0.50 
+
+## ⚠️ **Problem Analysis**: 
+**Trước đây**: TC_15 = 0.40197 (giảm thay vì tăng)  
+**Nguyên nhân**: Parameters quá aggressive làm hỏng topic coherence
+
+## 🔧 **BALANCED HYPERPARAMETER STRATEGY**:Enhanced DPO Implementation cho TC_15 Improvement
+
 ## 📊 **Mục tiêu**: Tăng TC_15 từ 0.43368 → 0.50+ 
 
 ## � **COMPREHENSIVE HYPERPARAMETER TUNING**:
