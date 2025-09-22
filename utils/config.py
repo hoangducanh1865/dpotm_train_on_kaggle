@@ -38,7 +38,7 @@ def add_model_argument(parser):
     # DPO controls
     parser.add_argument('--disable_dpo', action='store_true', default=False,
                         help='Disable DPO loss completely during fine-tuning')
-    parser.add_argument('--lambda_dpo', type=float, default=1.0,  # TẮT DPO hoàn toàn để preserve TC_15
+    parser.add_argument('--lambda_dpo', type=float, default=0.0,  # TẮT DPO hoàn toàn để preserve TC_15
                         help='DPO loss weight for preference learning')
     parser.add_argument('--lambda_reg', type=float, default=0.02,  # TĂNG từ 0.005 → 0.02 để enhance TC_15 regularization
                         help='Regularization loss weight')
