@@ -72,12 +72,30 @@ if __name__ == "__main__":
 
 
     if args.model == "ECRTM":
+        # Enhanced ECRTM initialization with advanced DPO parameters for TC_15 improvement
         model = ECRTM(vocab_size=dataset.vocab_size, 
                       num_topics=args.num_topics, 
                       dropout=args.dropout, 
                       pretrained_WE=pretrainWE if args.use_pretrainWE else None, 
                       weight_loss_ECR=args.weight_ECR,
-                      current_run_dir=current_run_dir)
+                      current_run_dir=current_run_dir,
+                      # Advanced DPO hyperparameters optimized for TC_15 improvement
+                      dpo_beta=0.1,           # Stability-optimized beta
+                      lambda_dpo=0.8,         # Strong DPO influence 
+                      lambda_reg=0.02,        # Enhanced regularization
+                      lambda_diversity=0.15,   # Topic diversity encouragement
+                      lambda_coherence=0.25,   # Strong coherence focus for TC_15
+                      use_ipo=True,           # IPO for stable preference learning
+                      label_smoothing=0.05,    # Label smoothing for robustness
+                      batch_size_dpo=512      # Efficient batch processing
+                      )
+        print("✓ Enhanced ECRTM model initialized with advanced DPO techniques:")
+        print("  - DPO Beta: 0.1 (stability optimized)")
+        print("  - Lambda DPO: 0.8 (strong influence)")
+        print("  - Lambda Coherence: 0.25 (TC_15 focused)")
+        print("  - Using IPO: True (stable preference learning)")
+        print("  - Label Smoothing: 0.05 (robustness)")
+        print("  - DPO Batch Size: 512 (efficiency)")
     elif args.model == "FASTOPIC":
         model = FASTOPIC(vocab_size=dataset.vocab_size, num_topics=args.num_topics)
     elif args.model == "NSTM":

@@ -71,10 +71,25 @@ class DPOFinetuner:
 
                 for key in rst_dict:
                     try:
-                        loss_rst_dict[key] += rst_dict[key] * \
-                            len(batch_data['data'])
+                        # Only accumulate scalar values (losses), skip complex metrics
+                        if isinstance(rst_dict[key], torch.Tensor) and rst_dict[key].dim() == 0:
+                            loss_rst_dict[key] += rst_dict[key].item() * len(batch_data['data'])
+                        elif isinstance(rst_dict[key], (int, float)):
+                            loss_rst_dict[key] += rst_dict[key] * len(batch_data['data'])
+                        else:
+                            # For non-scalar values (like accuracy, margin), store latest value
+                            loss_rst_dict[key] = rst_dict[key]
                     except:
-                        loss_rst_dict[key] += rst_dict[key] * len(batch_data)
+                        try:
+                            if isinstance(rst_dict[key], torch.Tensor) and rst_dict[key].dim() == 0:
+                                loss_rst_dict[key] += rst_dict[key].item() * len(batch_data)
+                            elif isinstance(rst_dict[key], (int, float)):
+                                loss_rst_dict[key] += rst_dict[key] * len(batch_data)
+                            else:
+                                loss_rst_dict[key] = rst_dict[key]
+                        except:
+                            # Skip problematic keys
+                            continue
 
             # for key in loss_rst_dict:
                 # wandb.log({key: loss_rst_dict[key] / data_size})
@@ -84,7 +99,16 @@ class DPOFinetuner:
             if verbose and epoch % self.log_interval == 0:
                 output_log = f'Epoch: {epoch:03d}'
                 for key in loss_rst_dict:
-                    output_log += f' {key}: {loss_rst_dict[key] / data_size :.3f}'
+                    try:
+                        if isinstance(loss_rst_dict[key], (int, float)):
+                            output_log += f' {key}: {loss_rst_dict[key] / data_size :.3f}'
+                        elif isinstance(loss_rst_dict[key], torch.Tensor) and loss_rst_dict[key].dim() == 0:
+                            output_log += f' {key}: {loss_rst_dict[key].item() / data_size :.3f}'
+                        else:
+                            # For non-scalar values, show as-is
+                            output_log += f' {key}: {loss_rst_dict[key]}'
+                    except:
+                        continue
 
                 print(output_log)
                 self.logger.info(output_log)
