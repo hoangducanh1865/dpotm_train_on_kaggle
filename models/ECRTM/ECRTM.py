@@ -14,7 +14,7 @@ class ECRTM(nn.Module):
 
         Xiaobao Wu, Xinshuai Dong, Thong Thanh Nguyen, Anh Tuan Luu.
     '''
-    def __init__(self, vocab_size, num_topics=50, en_units=200, dropout=0., pretrained_WE=None, embed_size=200, beta_temp=0.2, weight_loss_ECR=100.0, sinkhorn_alpha=20.0, sinkhorn_max_iter=1000, current_run_dir=None):
+    def __init__(self, vocab_size, num_topics=50, en_units=200, dropout=0., pretrained_WE=None, embed_size=200, beta_temp=0.2, weight_loss_ECR=100.0, sinkhorn_alpha=20.0, sinkhorn_max_iter=1000, current_run_dir=None, lambda_dpo=0.5, lambda_reg=0.005, lambda_diversity=0.1, use_ipo=False, label_smoothing=0.0):
         super().__init__()
 
         self.is_finetuing = False
@@ -24,10 +24,23 @@ class ECRTM(nn.Module):
         self.beta_temp = beta_temp
         self.current_run_dir = current_run_dir
         
+        # DPO hyperparameters
+        self.lambda_dpo = lambda_dpo
+        self.lambda_reg = lambda_reg
+        self.lambda_diversity = lambda_diversity
+        self.use_ipo = use_ipo
+        self.label_smoothing = label_smoothing
+        
+        # Cached data for efficiency
         self.beta_ref_path = None
         self.beta_ref = None
         self.preference_dataset_path = None
         self.preference_dataset = None
+        self.preference_pairs_cache = None
+        
+        # Metrics tracking
+        self.preference_accuracy = 0.0
+        self.reward_margin = 0.0
 
         self.a = 1 * np.ones((1, num_topics)).astype(np.float32)
         self.mu2 = nn.Parameter(torch.as_tensor((np.log(self.a).T - np.mean(np.log(self.a), 1)).T))
@@ -111,6 +124,23 @@ class ECRTM(nn.Module):
         loss_ECR = self.ECR(cost)
         return loss_ECR
     
+    def get_loss_diversity(self):
+        """Topic diversity loss to encourage distinct topics"""
+        beta = self.get_beta()
+        beta_norm = F.normalize(beta, p=2, dim=1)
+        similarity_matrix = torch.mm(beta_norm, beta_norm.t())
+        identity = torch.eye(self.num_topics, device=self.device)
+        similarity_matrix = similarity_matrix * (1 - identity)
+        diversity_loss = similarity_matrix.pow(2).mean()
+        
+        # Topic embedding diversity
+        topic_emb_norm = F.normalize(self.topic_embeddings, p=2, dim=1)
+        topic_similarity = torch.mm(topic_emb_norm, topic_emb_norm.t())
+        topic_similarity = topic_similarity * (1 - identity)
+        embedding_diversity_loss = topic_similarity.pow(2).mean()
+        
+        return diversity_loss + 0.5 * embedding_diversity_loss
+    
     def load_preference_dataset(self):
         self.preference_dataset_path = os.path.join(self.current_run_dir, 'preference_dataset.jsonl')
         if self.preference_dataset is None:
@@ -121,35 +151,102 @@ class ECRTM(nn.Module):
         self.beta_ref_path = os.path.join(self.current_run_dir, 'beta.npy')
         self.beta_ref = torch.from_numpy(np.load(self.beta_ref_path)).float().to(self.device)
         self.beta_ref.requires_grad = False
+        
+        # Pre-process preference pairs for efficiency
+        if self.preference_pairs_cache is None:
+            self.preference_pairs_cache = []
+            for line in self.preference_dataset:
+                data = json.loads(line)
+                k = data['k']
+                w_plus_indices = data['w_plus_indices']
+                w_minus_indices = data['w_minus_indices']
+                
+                for w_minus_idx in w_minus_indices:
+                    for w_plus_idx in w_plus_indices:
+                        self.preference_pairs_cache.append((k, w_plus_idx, w_minus_idx))
     
     def get_loss_DPO(self):
         if self.preference_dataset is None:
             self.load_preference_dataset()
             
         beta = self.get_beta()
-        # Debug
-        '''print(f"Loaded beta_ref shape: {beta_ref.shape}")'''
         
-        loss_DPO = []
-        for line in self.preference_dataset:
-            data = json.loads(line)
-            k = data['k']
-            w_plus_indices = data['w_plus_indices']
-            w_minus_indices = data['w_minus_indices']
+        # Vectorized computation for efficiency
+        batch_size = min(len(self.preference_pairs_cache), 512)  # Process in batches
+        
+        loss_DPO_batch = []
+        chosen_rewards = []
+        rejected_rewards = []
+        
+        for i in range(0, len(self.preference_pairs_cache), batch_size):
+            batch_pairs = self.preference_pairs_cache[i:i+batch_size]
             
-            for w_minus_idx in w_minus_indices:
-                for w_plus_idx in w_plus_indices:
-                    delta = beta[k, w_plus_idx] - beta[k, w_minus_idx]
-                    delta_ref = self.beta_ref[k, w_plus_idx] - self.beta_ref[k, w_minus_idx]
-                    loss_DPO_sample = -F.logsigmoid(delta - delta_ref)
-                    loss_DPO.append(loss_DPO_sample)
+            # Extract indices for batch processing
+            topics = torch.tensor([pair[0] for pair in batch_pairs], device=self.device)
+            w_plus = torch.tensor([pair[1] for pair in batch_pairs], device=self.device)
+            w_minus = torch.tensor([pair[2] for pair in batch_pairs], device=self.device)
+            
+            # Batch computation of logits
+            chosen_logits = beta[topics, w_plus]
+            rejected_logits = beta[topics, w_minus]
+            ref_chosen_logits = self.beta_ref[topics, w_plus]
+            ref_rejected_logits = self.beta_ref[topics, w_minus]
+            
+            # Compute DPO margins
+            policy_margins = chosen_logits - rejected_logits
+            ref_margins = ref_chosen_logits - ref_rejected_logits
+            logits = policy_margins - ref_margins
+            
+            if self.use_ipo:
+                # IPO loss (more stable)
+                losses = (logits - 1/(2 * self.lambda_dpo)) ** 2
+            else:
+                # Standard DPO with label smoothing
+                losses = (-F.logsigmoid(self.lambda_dpo * logits) * (1 - self.label_smoothing) - 
+                         F.logsigmoid(-self.lambda_dpo * logits) * self.label_smoothing)
+            
+            loss_DPO_batch.append(losses)
+            
+            # Track rewards for monitoring
+            chosen_rewards.extend((self.lambda_dpo * (chosen_logits - ref_chosen_logits)).detach().cpu().tolist())
+            rejected_rewards.extend((self.lambda_dpo * (rejected_logits - ref_rejected_logits)).detach().cpu().tolist())
         
-        return torch.stack(loss_DPO).mean()
+        # Compute metrics
+        chosen_rewards = torch.tensor(chosen_rewards)
+        rejected_rewards = torch.tensor(rejected_rewards)
+        self.preference_accuracy = (chosen_rewards > rejected_rewards).float().mean().item()
+        self.reward_margin = (chosen_rewards - rejected_rewards).mean().item()
+        
+        return torch.cat(loss_DPO_batch).mean()
 
     def get_loss_regularization(self):
         beta = self.get_beta()
-        regularization_term = torch.mean((beta - self.beta_ref) ** 2)
-        return regularization_term
+        
+        # Enhanced regularization with multiple components
+        # 1. L2 distance from reference
+        l2_reg = torch.mean((beta - self.beta_ref) ** 2)
+        
+        # 2. KL divergence regularization for smoother distributions
+        kl_reg = 0.0
+        for k in range(self.num_topics):
+            kl_reg += F.kl_div(
+                F.log_softmax(beta[k], dim=0), 
+                F.softmax(self.beta_ref[k], dim=0), 
+                reduction='sum'
+            )
+        kl_reg = kl_reg / self.num_topics
+        
+        # 3. Entropy regularization to prevent over-sharpening
+        entropy_reg = 0.0
+        for k in range(self.num_topics):
+            prob_dist = F.softmax(beta[k], dim=0)
+            entropy_reg -= torch.sum(prob_dist * torch.log(prob_dist + 1e-10))
+        entropy_reg = entropy_reg / self.num_topics
+        
+        # Combine regularization terms
+        total_reg = l2_reg + 0.1 * kl_reg - 0.01 * entropy_reg
+        
+        return total_reg
 
     def pairwise_euclidean_distance(self, x, y):
         cost = torch.sum(x ** 2, axis=1, keepdim=True) + torch.sum(y ** 2, dim=1) - 2 * torch.matmul(x, y.t())
@@ -165,15 +262,18 @@ class ECRTM(nn.Module):
             recon_loss = -(bow * recon.log()).sum(axis=1).mean()
 
             loss_TM = recon_loss + loss_KL
-
             loss_ECR = self.get_loss_ECR()
             
-            loss = loss_TM + loss_ECR
+            # Add diversity loss for better topic distinctiveness
+            loss_diversity = self.get_loss_diversity()
+            
+            loss = loss_TM + loss_ECR + self.lambda_diversity * loss_diversity
 
             rst_dict = {
                 'loss': loss,
                 'loss_TM': loss_TM,
-                'loss_ECR': loss_ECR
+                'loss_ECR': loss_ECR,
+                'loss_diversity': loss_diversity
             }
 
             return rst_dict
@@ -186,23 +286,58 @@ class ECRTM(nn.Module):
             recon_loss = -(bow * recon.log()).sum(axis=1).mean()
 
             loss_TM = recon_loss + loss_KL
-
             loss_ECR = self.get_loss_ECR()
             
-            lambda_ref = 0.5 # [0.01, 0.05, 0.1, 0.5, 1.0]
-            loss_DPO = self.get_loss_DPO()
+            # Add diversity loss for fine-tuning phase
+            loss_diversity = self.get_loss_diversity()
             
-            lambda_reg = 0.005 # [0.001, 0.005, 0.01]
+            # Adaptive loss weighting based on training progress
+            with torch.no_grad():
+                loss_DPO = self.get_loss_DPO()
+                loss_regularization = self.get_loss_regularization()
+            
+            # Compute loss component ratios for monitoring
+            loss_tm_magnitude = loss_TM.detach().item()
+            loss_ecr_magnitude = loss_ECR.detach().item()
+            loss_dpo_magnitude = loss_DPO.detach().item()
+            loss_reg_magnitude = loss_regularization.detach().item()
+            loss_div_magnitude = loss_diversity.detach().item()
+            
+            # Adaptive scaling to balance loss components
+            total_base_loss = loss_tm_magnitude + loss_ecr_magnitude
+            if total_base_loss > 0:
+                dpo_scale = min(self.lambda_dpo, total_base_loss / (loss_dpo_magnitude + 1e-8))
+                reg_scale = min(self.lambda_reg, total_base_loss / (loss_reg_magnitude + 1e-8))
+                div_scale = min(self.lambda_diversity, total_base_loss / (loss_div_magnitude + 1e-8))
+            else:
+                dpo_scale = self.lambda_dpo
+                reg_scale = self.lambda_reg
+                div_scale = self.lambda_diversity
+            
+            # Re-compute with gradients for actual loss
+            loss_DPO = self.get_loss_DPO()
             loss_regularization = self.get_loss_regularization()
             
-            loss = loss_TM + loss_ECR + lambda_ref * loss_DPO + lambda_reg * loss_regularization
+            loss = loss_TM + loss_ECR + dpo_scale * loss_DPO + reg_scale * loss_regularization + div_scale * loss_diversity
 
             rst_dict = {
                 'loss': loss,
                 'loss_TM': loss_TM,
                 'loss_ECR': loss_ECR,
                 'loss_DPO': loss_DPO,
-                'loss_regularization': loss_regularization
+                'loss_regularization': loss_regularization,
+                'loss_diversity': loss_diversity,
+                'dpo_scale': dpo_scale,
+                'reg_scale': reg_scale,
+                'div_scale': div_scale,
+                'preference_accuracy': self.preference_accuracy,
+                'reward_margin': self.reward_margin,
+                'loss_ratios': {
+                    'TM': loss_tm_magnitude / (loss_tm_magnitude + loss_ecr_magnitude + 1e-8),
+                    'ECR': loss_ecr_magnitude / (loss_tm_magnitude + loss_ecr_magnitude + 1e-8),
+                    'DPO': loss_dpo_magnitude,
+                    'REG': loss_reg_magnitude
+                }
             }
 
             return rst_dict
