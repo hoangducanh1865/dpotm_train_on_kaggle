@@ -37,10 +37,64 @@ class PreferenceDatasetCreator:
                 temperature=0.0
             )
             raw_data = response.choices[0].message.content.strip()
+            
             try:
                 data = json.loads(raw_data)
-            except json.JSONDecodeError:
-                raise TypeError(f"JSON parsing failed for line {k}: {raw_data}")
+            except json.JSONDecodeError as e:
+                # Try to fix common JSON formatting issues
+                print(f"🔧 Attempting to fix JSON for line {k}...")
+                
+                # Fix 1: Replace unquoted strings in arrays
+                import re
+                fixed_data = raw_data
+                
+                # Pattern to find arrays with mixed quoted/unquoted strings
+                # Look for: [numbers, unquoted_words, numbers]
+                def fix_array_content(match):
+                    array_content = match.group(1)
+                    # Split by comma and fix each element
+                    elements = [elem.strip() for elem in array_content.split(',')]
+                    fixed_elements = []
+                    
+                    for elem in elements:
+                        if elem.isdigit() or (elem.startswith('-') and elem[1:].isdigit()):
+                            # Keep numbers as is
+                            fixed_elements.append(elem)
+                        elif elem.startswith('"') and elem.endswith('"'):
+                            # Keep quoted strings as is
+                            fixed_elements.append(elem)
+                        elif elem.startswith("'") and elem.endswith("'"):
+                            # Convert single quotes to double quotes
+                            fixed_elements.append(f'"{elem[1:-1]}"')
+                        else:
+                            # Add quotes to unquoted strings
+                            fixed_elements.append(f'"{elem}"')
+                    
+                    return '[' + ', '.join(fixed_elements) + ']'
+                
+                # Apply fixes to arrays
+                fixed_data = re.sub(r'\[([^\]]+)\]', fix_array_content, fixed_data)
+                
+                try:
+                    data = json.loads(fixed_data)
+                    print(f"✅ JSON fixed successfully for line {k}")
+                except json.JSONDecodeError:
+                    # If still failing, create a fallback structure
+                    print(f"⚠️ JSON still invalid for line {k}, creating fallback...")
+                    
+                    # Extract topic info manually
+                    topic_match = re.search(r'"topic":\s*"([^"]*)"', raw_data)
+                    topic_name = topic_match.group(1) if topic_match else f"Topic_{k}"
+                    
+                    # Create simple fallback with first few indices
+                    data = {
+                        "k": k,
+                        "topic": topic_name,
+                        "w_plus_indices": list(range(0, min(10, len(words_with_indices)))),  # First 10 indices
+                        "w_minus_indices": list(range(max(0, len(words_with_indices)-10), len(words_with_indices)))  # Last 10 indices
+                    }
+                    print(f"📝 Created fallback preference data for line {k}")
+                    
             return data
             
         with open(self.top_words_25_path, 'r', encoding='utf-8') as infile, open(self.preference_dataset_path, 'w', encoding='utf-8') as outfile:

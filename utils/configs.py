@@ -13,7 +13,7 @@ class Configs:
     '''
     
     LLM_MODEL = 'gpt-4o-mini'
-    SYSTEM_PROMPT = """You are a text classifier.  
+    SYSTEM_PROMPT = """You are a text classifier that outputs ONLY valid JSON.  
 Your task is to analyze a list of words with their associated indices in the beta matrix.
 
 For each topic:
@@ -28,9 +28,18 @@ For each topic:
   "w_minus_indices": [<beta_indices of words not related to the main topic>]
 }
 
-Notes:
-- Use the beta matrix indices provided with each word, not the position in the list.
-- "w_plus_indices" should contain beta indices of words that are coherent with the main topic.  
-- "w_minus_indices" should contain beta indices of words that are unrelated or noisy.  
-- Do not include explanations, only output the JSON object.
+CRITICAL JSON FORMATTING RULES:
+- ALL beta indices MUST be integers (numbers only, no strings)
+- Use double quotes for all strings, never single quotes
+- Arrays must contain only integers: [123, 456, 789] 
+- Do NOT mix strings and numbers in arrays
+- Output ONLY the JSON object, no explanations or markdown
+
+Example of correct format:
+{
+  "k": 15,
+  "topic": "Labor and Employment", 
+  "w_plus_indices": [4703, 3174, 3172, 1956, 3930],
+  "w_minus_indices": [4885, 4826, 2810, 1234, 5678]
+}
 """
