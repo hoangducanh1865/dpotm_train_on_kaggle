@@ -55,8 +55,8 @@ def add_wete_argument(parser):
 
 
 def add_training_argument(parser):
-    parser.add_argument('--epochs', type=int, default=300)  # GIẢM từ 500 → 300 để tránh over-clustering
-    parser.add_argument('--finetune_epochs', type=int, default=300) # TĂNG to 300 for maximum diversity training
+    parser.add_argument('--epochs', type=int, default=400)  # GIẢM từ 500 → 300 để tránh over-clustering
+    parser.add_argument('--finetune_epochs', type=int, default=100) # TĂNG to 300 for maximum diversity training
     parser.add_argument('--batch_size', type=int, default=200,  # Keep 200 for stable gradients
                         help='batch size')
     parser.add_argument('--lr', type=float, default=0.002,  # Keep base learning rate
