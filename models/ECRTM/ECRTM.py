@@ -85,21 +85,33 @@ class ECRTM(nn.Module):
         dist = self.pairwise_euclidean_distance(self.topic_embeddings, self.word_embeddings)
         beta = F.softmax(-dist / self.beta_temp, dim=0)
         
-        # EXTREME diversity enhancement during fine-tuning
+        # ULTRA AGGRESSIVE diversity enhancement during fine-tuning
         if hasattr(self, 'is_finetuing') and self.is_finetuing:
-            # Apply diversity-promoting transformation
+            # Apply maximum diversity-promoting transformation
             # 1. Normalize topic distributions
             beta_norm = F.normalize(beta, p=2, dim=1)
             
             # 2. Compute topic similarity matrix
             similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
             
-            # 3. Apply diversity penalty to beta directly
-            # Reduce probability mass on similar topics
-            diversity_mask = 1.0 - torch.clamp(similarity_matrix.mean(dim=0, keepdim=True).t(), 0.0, 0.7)
+            # 3. ULTRA aggressive diversity penalty to beta directly
+            # Heavily reduce probability mass on similar topics
+            diversity_mask = 1.0 - torch.clamp(similarity_matrix.mean(dim=0, keepdim=True).t(), 0.0, 0.5)  # Reduce from 0.7 to 0.5
             beta = beta * diversity_mask.expand_as(beta)
             
-            # 4. Renormalize to maintain probability constraints
+            # 4. Additional topic separation enhancement
+            # Apply exponential penalty to high-similarity topics
+            high_sim_penalty = torch.exp(-2.0 * diversity_mask)  # Exponential penalty
+            beta = beta * high_sim_penalty.expand_as(beta)
+            
+            # 5. Encourage topic dispersion across vocabulary
+            # Add noise to break topic clustering patterns
+            if self.training:
+                noise = torch.randn_like(beta) * 0.02  # Small noise for dispersion
+                beta = beta + noise
+                beta = torch.clamp(beta, min=1e-8)  # Ensure positivity
+            
+            # 6. Renormalize to maintain probability constraints
             beta = F.normalize(beta, p=1, dim=1)
         
         return beta
@@ -417,32 +429,37 @@ class ECRTM(nn.Module):
         entropy = -torch.sum(beta * torch.log(beta + 1e-8), dim=1)
         sparsity_reg = -torch.mean(entropy)  # MINIMIZE entropy (MAXIMIZE focus)
         
-        # 4. Inter-topic diversity - MAXIMIZE AGGRESSIVE diversity for TD > 0.90
+        # 4. Inter-topic diversity - ULTRA AGGRESSIVE diversity for TD > 0.90
         topic_similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
-        # MUCH lower threshold and EXTREME penalty for maximum diversity
-        high_sim_mask = (topic_similarity_matrix > 0.5).float()  # REDUCE from 0.7 to 0.5 (super strict)
+        # ULTRA strict threshold and MASSIVE penalty for maximum diversity
+        high_sim_mask = (topic_similarity_matrix > 0.3).float()  # REDUCE from 0.5 to 0.3 (ultra strict)
         off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
         diversity_penalty = torch.mean(topic_similarity_matrix * high_sim_mask * off_diagonal_mask)
         
-        # 5. EXTREME diversity regularization - force topics apart
+        # 5. ULTRA diversity regularization - force maximum topic separation
         # Minimize pairwise cosine similarities between all topic pairs
         all_pairs_similarity = torch.mean(torch.triu(topic_similarity_matrix * off_diagonal_mask, diagonal=1))
         explicit_diversity_reg = all_pairs_similarity  # Minimize average pairwise similarity
         
-        # 6. ADDITIONAL: Orthogonality constraint for maximum diversity
+        # 6. MAXIMUM orthogonality constraint for TD > 0.90
         # Force topics to be as orthogonal as possible
         beta_centered = beta - beta.mean(dim=1, keepdim=True)
         orthogonality_matrix = torch.matmul(F.normalize(beta_centered, p=2, dim=1), 
                                           F.normalize(beta_centered, p=2, dim=1).t())
         orthogonality_penalty = torch.mean(torch.triu(orthogonality_matrix * off_diagonal_mask, diagonal=1)**2)
         
-        # EXTREMELY AGGRESSIVE diversity-focused balance for TD > 0.90
-        total_reg = (0.3 * coherence_reg +         # MAJOR reduction in coherence weight
-                    0.1 * smoothness_reg +         # Maintain minimal smoothness  
-                    0.05 * sparsity_reg +          # Minimal sparsity
-                    -0.35 * diversity_penalty +    # EXTREME diversity penalty (2.3x increase)
-                    -0.25 * explicit_diversity_reg + # STRONG explicit diversity  
-                    -0.15 * orthogonality_penalty) # NEW: Orthogonality constraint
+        # 7. NEW: Topic dispersion regularization - spread topics across vocabulary space
+        topic_means = torch.mean(beta, dim=1, keepdim=True)  # Mean probability per topic
+        dispersion_penalty = -torch.var(topic_means)  # Maximize variance in topic means
+        
+        # ULTRA AGGRESSIVE diversity-first balance for TD > 0.90
+        total_reg = (0.15 * coherence_reg +         # MINIMAL coherence weight (was 0.3)
+                    0.05 * smoothness_reg +         # Minimal smoothness  
+                    0.02 * sparsity_reg +          # Almost zero sparsity
+                    -0.5 * diversity_penalty +     # MASSIVE diversity penalty (was -0.35)
+                    -0.35 * explicit_diversity_reg + # ULTRA strong explicit diversity  
+                    -0.25 * orthogonality_penalty + # STRONG orthogonality constraint
+                    -0.08 * dispersion_penalty)    # NEW: Topic dispersion encouragement
         
         return total_reg
 
