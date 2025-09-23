@@ -23,28 +23,28 @@ def add_model_argument(parser):
     parser.add_argument('--dropout', type=float, default=0.15)  # Tăng từ 0.1 → 0.15 cho better regularization
     parser.add_argument('--hidden_dim_1', type=int, default=384)  # Giảm từ 512 → 384 cho stable training
     parser.add_argument('--hidden_dim_2', type=int, default=384)  # Giảm từ 512 → 384 cho stable training
-    parser.add_argument('--theta_temp', type=float, default=1.0)  # Tăng từ 0.8 → 1.0 cho smoother topic distribution
-    parser.add_argument('--DT_alpha', type=float, default=2.5)   # GIẢM từ 3.5 → 2.5 cho better coherence
-    parser.add_argument('--TW_alpha', type=float, default=3.5)   # TĂNG từ 2.5 → 3.5 cho much better topic-word coherence
+    parser.add_argument('--theta_temp', type=float, default=1.5)  # TĂNG MẠNH từ 1.0 → 1.5 cho extreme diversity
+    parser.add_argument('--DT_alpha', type=float, default=1.8)   # GIẢM MẠNH từ 2.5 → 1.8 cho looser topic constraints
+    parser.add_argument('--TW_alpha', type=float, default=2.8)   # GIẢM từ 3.5 → 2.8 cho softer topic-word coherence
     
-    parser.add_argument('--weight_GR', type=float, default=1.5)  # Giảm từ 2.0 → 1.5 cho balanced group regularization
-    parser.add_argument('--alpha_GR', type=float, default=6.0)   # Giảm từ 8.0 → 6.0 cho stable group clustering
-    parser.add_argument('--weight_InfoNCE', type=float, default=80.0) # TĂNG từ 60.0 → 80.0 cho stronger contrastive learning
-    parser.add_argument('--beta_temp', type=float, default=0.18)  # TĂNG từ 0.15 → 0.18 cho better diversity  
-    parser.add_argument('--weight_ECR', type=float, default=120.0) # REDUCE từ 150.0 → 120.0 để improve diversity
+    parser.add_argument('--weight_GR', type=float, default=0.8)  # GIẢM MẠNH từ 1.5 → 0.8 cho minimal group clustering
+    parser.add_argument('--alpha_GR', type=float, default=3.0)   # GIẢM MẠNH từ 6.0 → 3.0 cho very loose clustering
+    parser.add_argument('--weight_InfoNCE', type=float, default=40.0) # GIẢM MẠNH từ 80.0 → 40.0 cho reduced contrastive learning
+    parser.add_argument('--beta_temp', type=float, default=0.35)  # TĂNG MẠNH từ 0.18 → 0.35 cho maximum diversity  
+    parser.add_argument('--weight_ECR', type=float, default=80.0) # GIẢM MẠNH từ 120.0 → 80.0 để cực đại diversity
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
-    # DPO controls - MAXIMIZE AGGRESSIVENESS for significant TC_15 improvement
+    # DPO controls - DIVERSITY-FOCUSED optimization for TD > 0.90
     parser.add_argument('--disable_dpo', action='store_true', default=False,
                         help='Disable DPO loss completely during fine-tuning')
-    parser.add_argument('--lambda_dpo', type=float, default=0.7,  # FURTHER INCREASE for maximum impact
+    parser.add_argument('--lambda_dpo', type=float, default=0.5,  # REDUCE for diversity focus
                         help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.2,  # STRONGER coherence regularization
+    parser.add_argument('--lambda_reg', type=float, default=0.3,  # INCREASE regularization for diversity
                         help='Regularization loss weight')
     parser.add_argument('--use_ipo', action='store_true', default=True,  # Enable IPO for stable training
                         help='Use IPO loss instead of standard DPO for stable training')
-    parser.add_argument('--label_smoothing', type=float, default=0.0,  # NO smoothing for sharp preferences
+    parser.add_argument('--label_smoothing', type=float, default=0.1,  # Add smoothing for diversity
                         help='Label smoothing for preference loss to reduce overfitting')
 
 def add_wete_argument(parser):
@@ -56,12 +56,12 @@ def add_wete_argument(parser):
 
 def add_training_argument(parser):
     parser.add_argument('--epochs', type=int, default=500)  # Keep 500 epochs for stable base training
-    parser.add_argument('--finetune_epochs', type=int, default=100) # REDUCE to 100 epochs for gentle fine-tuning
+    parser.add_argument('--finetune_epochs', type=int, default=150) # INCREASE to 150 for diversity training
     parser.add_argument('--batch_size', type=int, default=200,  # Keep 200 for stable gradients
                         help='batch size')
     parser.add_argument('--lr', type=float, default=0.002,  # Keep base learning rate
                         help='learning rate')
-    parser.add_argument('--finetune_lr', type=float, default=0.0003, # REDUCE for very gentle fine-tuning
+    parser.add_argument('--finetune_lr', type=float, default=0.0005, # INCREASE for diversity training
                         help='fine-tune learning rate')
     parser.add_argument('--device', type=str, default='cuda',
                         help='device to run the model, cuda or cpu')
@@ -69,7 +69,7 @@ def add_training_argument(parser):
     parser.add_argument('--lr_scheduler', type=str,
                         help='learning rate scheduler, dont use if not needed, \
                             currently support: step', default='StepLR')
-    parser.add_argument('--lr_step_size', type=int, default=100, # Increase step size for gentler decay
+    parser.add_argument('--lr_step_size', type=int, default=150, # Increase step size for diversity training
                         help='step size for learning rate scheduler')
 
 def add_eval_argument(parser):
