@@ -261,16 +261,29 @@ class ECRTM(nn.Module):
                 
                 # Strategy 1: TOP vs BOTTOM pairing (coherence-focused) - MORE pairs
                 for i in range(min(12, min_pairs)):  # INCREASE from 8 to 12 confident pairs
-                    w_plus_idx = w_plus_indices[i]  # Highly preferred words
-                    w_minus_idx = w_minus_indices[-(i+1)]  # Clearly rejected words
-                    self.preference_cache.append((k, w_plus_idx, w_minus_idx))
+                    try:
+                        w_plus_idx = int(w_plus_indices[i])  # ENSURE integer
+                        w_minus_idx = int(w_minus_indices[-(i+1)])  # ENSURE integer
+                        
+                        # Validate indices are within vocab range
+                        if 0 <= w_plus_idx < self.vocab_size and 0 <= w_minus_idx < self.vocab_size:
+                            self.preference_cache.append((k, w_plus_idx, w_minus_idx))
+                    except (ValueError, TypeError, IndexError):
+                        continue
                 
                 # Strategy 2: HIGH vs MEDIUM pairing (nuanced preferences) - MORE coverage
                 for i in range(12, max_pairs_per_topic):
-                    w_plus_idx = w_plus_indices[i % min(len(w_plus_indices), 20)]  # Top 20 (vs 15)
-                    w_minus_idx = w_minus_indices[i % min(len(w_minus_indices), 20)]  # Bottom 20 (vs 15)
-                    if w_plus_idx != w_minus_idx:  # Avoid same word pairs
-                        self.preference_cache.append((k, w_plus_idx, w_minus_idx))
+                    try:
+                        w_plus_idx = int(w_plus_indices[i % min(len(w_plus_indices), 20)])  # ENSURE integer
+                        w_minus_idx = int(w_minus_indices[i % min(len(w_minus_indices), 20)])  # ENSURE integer
+                        
+                        # Validate and avoid duplicates
+                        if (w_plus_idx != w_minus_idx and 
+                            0 <= w_plus_idx < self.vocab_size and 
+                            0 <= w_minus_idx < self.vocab_size):
+                            self.preference_cache.append((k, w_plus_idx, w_minus_idx))
+                    except (ValueError, TypeError, IndexError):
+                        continue
         
         # MORE AGGRESSIVE batch processing for stronger learning
         batch_size = min(400, len(self.preference_cache))  # INCREASE from 256 to 400
@@ -292,6 +305,20 @@ class ECRTM(nn.Module):
         temperature = 0.4  # DECREASE from 0.5 to 0.4 for sharper, more aggressive learning
         
         for k, w_plus_idx, w_minus_idx in batch_preferences:
+            # ENSURE indices are integers (convert strings if needed)
+            try:
+                w_plus_idx = int(w_plus_idx) if not isinstance(w_plus_idx, int) else w_plus_idx
+                w_minus_idx = int(w_minus_idx) if not isinstance(w_minus_idx, int) else w_minus_idx
+            except (ValueError, TypeError):
+                # Skip invalid indices
+                print(f"⚠️ Skipping invalid indices: w_plus={w_plus_idx}, w_minus={w_minus_idx}")
+                continue
+            
+            # Validate indices are within vocab range
+            if not (0 <= w_plus_idx < self.vocab_size and 0 <= w_minus_idx < self.vocab_size):
+                print(f"⚠️ Skipping out-of-range indices: w_plus={w_plus_idx}, w_minus={w_minus_idx}")
+                continue
+                
             # Policy logps với coherence-aware temperature
             chosen_logp = torch.log(torch.softmax(beta[k] / temperature, dim=0)[w_plus_idx] + 1e-8)
             rejected_logp = torch.log(torch.softmax(beta[k] / temperature, dim=0)[w_minus_idx] + 1e-8)

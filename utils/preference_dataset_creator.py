@@ -61,14 +61,35 @@ class PreferenceDatasetCreator:
                             # Keep numbers as is
                             fixed_elements.append(elem)
                         elif elem.startswith('"') and elem.endswith('"'):
-                            # Keep quoted strings as is
-                            fixed_elements.append(elem)
+                            # Keep quoted strings as is (but these should be converted to numbers)
+                            try:
+                                # Try to extract number from quoted string
+                                num_val = elem.strip('"')
+                                if num_val.isdigit():
+                                    fixed_elements.append(num_val)
+                                else:
+                                    # Skip non-numeric strings
+                                    continue
+                            except:
+                                continue
                         elif elem.startswith("'") and elem.endswith("'"):
-                            # Convert single quotes to double quotes
-                            fixed_elements.append(f'"{elem[1:-1]}"')
+                            # Handle single quoted
+                            try:
+                                num_val = elem.strip("'")
+                                if num_val.isdigit():
+                                    fixed_elements.append(num_val)
+                                else:
+                                    continue
+                            except:
+                                continue
                         else:
-                            # Add quotes to unquoted strings
-                            fixed_elements.append(f'"{elem}"')
+                            # Try to parse as number, skip if not
+                            try:
+                                if elem.strip().isdigit():
+                                    fixed_elements.append(elem.strip())
+                                # Skip non-numeric unquoted strings
+                            except:
+                                continue
                     
                     return '[' + ', '.join(fixed_elements) + ']'
                 
@@ -78,6 +99,13 @@ class PreferenceDatasetCreator:
                 try:
                     data = json.loads(fixed_data)
                     print(f"✅ JSON fixed successfully for line {k}")
+                    
+                    # FINAL VALIDATION: Ensure all indices are integers
+                    if 'w_plus_indices' in data:
+                        data['w_plus_indices'] = [int(x) for x in data['w_plus_indices'] if str(x).isdigit()]
+                    if 'w_minus_indices' in data:
+                        data['w_minus_indices'] = [int(x) for x in data['w_minus_indices'] if str(x).isdigit()]
+                    
                 except json.JSONDecodeError:
                     # If still failing, create a fallback structure
                     print(f"⚠️ JSON still invalid for line {k}, creating fallback...")

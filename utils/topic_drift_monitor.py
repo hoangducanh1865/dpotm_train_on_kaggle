@@ -11,7 +11,7 @@ class TopicDriftMonitor:
     """
     
     def __init__(self, vocab: List[str], num_topics: int = 50, top_k: int = 25, 
-                 jaccard_threshold: float = 0.6, check_interval: int = 10):
+                 jaccard_threshold: float = 0.8, check_interval: int = 10):
         """
         Args:
             vocab: Vocabulary list
