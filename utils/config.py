@@ -35,12 +35,12 @@ def add_model_argument(parser):
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
-    # DPO controls - MORE AGGRESSIVE for higher TC_15
+    # DPO controls - MAXIMIZE AGGRESSIVENESS for significant TC_15 improvement
     parser.add_argument('--disable_dpo', action='store_true', default=False,
                         help='Disable DPO loss completely during fine-tuning')
-    parser.add_argument('--lambda_dpo', type=float, default=0.5,  # INCREASE for more aggressive DPO
+    parser.add_argument('--lambda_dpo', type=float, default=0.7,  # FURTHER INCREASE for maximum impact
                         help='DPO loss weight for preference learning')
-    parser.add_argument('--lambda_reg', type=float, default=0.15,  # STRONGER coherence regularization
+    parser.add_argument('--lambda_reg', type=float, default=0.2,  # STRONGER coherence regularization
                         help='Regularization loss weight')
     parser.add_argument('--use_ipo', action='store_true', default=True,  # Enable IPO for stable training
                         help='Use IPO loss instead of standard DPO for stable training')
