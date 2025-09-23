@@ -399,18 +399,24 @@ class ECRTM(nn.Module):
         entropy = -torch.sum(beta * torch.log(beta + 1e-8), dim=1)
         sparsity_reg = -torch.mean(entropy)  # MINIMIZE entropy (MAXIMIZE focus)
         
-        # 4. Inter-topic diversity - prevent topic collapse
+        # 4. Inter-topic diversity - STRENGTHEN to improve TD
         topic_similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
-        # Only penalize very high similarities (> 0.8)
-        high_sim_mask = (topic_similarity_matrix > 0.8).float()
+        # Lower threshold and stronger penalty for better diversity
+        high_sim_mask = (topic_similarity_matrix > 0.7).float()  # REDUCE from 0.8 to 0.7
         off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
         diversity_penalty = torch.mean(topic_similarity_matrix * high_sim_mask * off_diagonal_mask)
         
-        # MAXIMUM COHERENCE-OPTIMIZED weighting - extreme TC_15 focus
-        total_reg = (0.7 * coherence_reg +        # MAXIMUM top-15 focus (0.6→0.7)
-                    0.2 * smoothness_reg +       # Reduce smoothness constraint  
-                    0.05 * sparsity_reg +        # Minimal sparsity
-                    -0.05 * diversity_penalty)   # Keep diversity penalty small
+        # 5. EXPLICIT diversity regularization - encourage distinct topics
+        # Minimize pairwise cosine similarities between all topic pairs
+        all_pairs_similarity = torch.mean(torch.triu(topic_similarity_matrix * off_diagonal_mask, diagonal=1))
+        explicit_diversity_reg = all_pairs_similarity  # Minimize average pairwise similarity
+        
+        # OPTIMIZED COHERENCE + DIVERSITY balance 
+        total_reg = (0.55 * coherence_reg +        # Slightly reduce TC_15 focus to make room for diversity
+                    0.15 * smoothness_reg +        # Maintain reference similarity  
+                    0.05 * sparsity_reg +          # Minimal sparsity
+                    -0.15 * diversity_penalty +    # Strong diversity penalty for similar topics
+                    -0.1 * explicit_diversity_reg) # NEW: Explicit diversity regularization
         
         return total_reg
 

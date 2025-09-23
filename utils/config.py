@@ -30,8 +30,8 @@ def add_model_argument(parser):
     parser.add_argument('--weight_GR', type=float, default=1.5)  # Giảm từ 2.0 → 1.5 cho balanced group regularization
     parser.add_argument('--alpha_GR', type=float, default=6.0)   # Giảm từ 8.0 → 6.0 cho stable group clustering
     parser.add_argument('--weight_InfoNCE', type=float, default=80.0) # TĂNG từ 60.0 → 80.0 cho stronger contrastive learning
-    parser.add_argument('--beta_temp', type=float, default=0.15)  # GIẢM từ 0.2 → 0.15 cho sharper word distributions  
-    parser.add_argument('--weight_ECR', type=float, default=150.0) # TĂNG từ 120.0 → 150.0 cho stronger embedding clustering
+    parser.add_argument('--beta_temp', type=float, default=0.18)  # TĂNG từ 0.15 → 0.18 cho better diversity  
+    parser.add_argument('--weight_ECR', type=float, default=120.0) # REDUCE từ 150.0 → 120.0 để improve diversity
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     
