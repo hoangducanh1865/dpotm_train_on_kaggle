@@ -23,15 +23,15 @@ def add_model_argument(parser):
     parser.add_argument('--dropout', type=float, default=0.15)  # Tăng từ 0.1 → 0.15 cho better regularization
     parser.add_argument('--hidden_dim_1', type=int, default=384)  # Giảm từ 512 → 384 cho stable training
     parser.add_argument('--hidden_dim_2', type=int, default=384)  # Giảm từ 512 → 384 cho stable training
-    parser.add_argument('--theta_temp', type=float, default=3.0)  # TĂNG KHỦNG KHIẾP từ 2.0 → 3.0 cho absolute extreme diversity
-    parser.add_argument('--DT_alpha', type=float, default=0.8)   # GIẢM KHỦNG KHIẾP từ 1.2 → 0.8 cho zero constraints  
-    parser.add_argument('--TW_alpha', type=float, default=1.5)   # GIẢM KHỦNG KHIẾP từ 2.0 → 1.5 cho zero coherence pressure
+    parser.add_argument('--theta_temp', type=float, default=5.0)  # TĂNG CỰC KHỦNG từ 3.0 → 5.0 cho absolute apocalyptic diversity
+    parser.add_argument('--DT_alpha', type=float, default=0.5)   # GIẢM CỰC KHỦNG từ 0.8 → 0.5 cho zero constraints  
+    parser.add_argument('--TW_alpha', type=float, default=1.0)   # GIẢM CỰC KHỦNG từ 1.5 → 1.0 cho zero coherence pressure
     
-    parser.add_argument('--weight_GR', type=float, default=0.1)  # GIẢM KHỦNG KHIẾP từ 0.3 → 0.1 cho hoàn toàn zero clustering
-    parser.add_argument('--alpha_GR', type=float, default=0.8)   # GIẢM KHỦNG KHIẾP từ 1.5 → 0.8 cho absolute zero clustering 
-    parser.add_argument('--weight_InfoNCE', type=float, default=10.0) # GIẢM KHỦNG KHIẾP từ 20.0 → 10.0 cho zero contrastive
-    parser.add_argument('--beta_temp', type=float, default=1.0)  # TĂNG KHỦNG KHIẾP từ 0.55 → 1.0 cho absolute maximum diversity  
-    parser.add_argument('--weight_ECR', type=float, default=20.0) # GIẢM KHỦNG KHIẾP từ 50.0 → 20.0 để hoàn toàn loại bỏ clustering
+    parser.add_argument('--weight_GR', type=float, default=0.01)  # GIẢM CỰC KHỦNG từ 0.1 → 0.01 cho absolute zero clustering
+    parser.add_argument('--alpha_GR', type=float, default=0.3)   # GIẢM CỰC KHỦNG từ 0.8 → 0.3 cho kill clustering completely 
+    parser.add_argument('--weight_InfoNCE', type=float, default=5.0) # GIẢM CỰC KHỦNG từ 10.0 → 5.0 cho kill contrastive
+    parser.add_argument('--beta_temp', type=float, default=2.0)  # TĂNG CỰC KHỦNG từ 1.0 → 2.0 cho apocalyptic diversity  
+    parser.add_argument('--weight_ECR', type=float, default=5.0) # GIẢM CỰC KHỦNG từ 20.0 → 5.0 để hoàn toàn kill clustering
     parser.add_argument('--use_pretrainWE', action='store_true',
                         default=True, help='Enable use_pretrainWE mode')
     

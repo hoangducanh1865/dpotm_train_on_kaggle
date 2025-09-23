@@ -84,11 +84,11 @@ class ECRTM(nn.Module):
     def get_beta(self):
         dist = self.pairwise_euclidean_distance(self.topic_embeddings, self.word_embeddings)
         
-        # ADAPTIVE beta temperature for maximum diversity
+        # APOCALYPTIC ADAPTIVE beta temperature for maximum diversity
         adaptive_beta_temp = self.beta_temp
         if hasattr(self, 'is_finetuing') and self.is_finetuing:
-            # Further increase temperature during fine-tuning for extreme diversity
-            adaptive_beta_temp = self.beta_temp * 1.5
+            # EXTREME temperature increase during fine-tuning for apocalyptic diversity
+            adaptive_beta_temp = self.beta_temp * 3.0  # Triple the temperature
         
         beta = F.softmax(-dist / adaptive_beta_temp, dim=0)
         
@@ -102,19 +102,19 @@ class ECRTM(nn.Module):
             similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
             
             # 3. APOCALYPTIC diversity penalty to beta directly
-            # Extremely heavily reduce probability mass on similar topics
-            diversity_mask = 1.0 - torch.clamp(similarity_matrix.mean(dim=0, keepdim=True).t(), 0.0, 0.2)  # Reduce from 0.5 to 0.2
+            # Ultra extremely heavily reduce probability mass on similar topics
+            diversity_mask = 1.0 - torch.clamp(similarity_matrix.mean(dim=0, keepdim=True).t(), 0.0, 0.1)  # Reduce from 0.2 to 0.1
             beta = beta * diversity_mask.expand_as(beta)
             
-            # 4. EXTREME topic separation enhancement
+            # 4. APOCALYPTIC topic separation enhancement
             # Apply exponential penalty to high-similarity topics
-            high_sim_penalty = torch.exp(-5.0 * diversity_mask)  # Increase from -2.0 to -5.0
+            high_sim_penalty = torch.exp(-10.0 * diversity_mask)  # Increase from -5.0 to -10.0
             beta = beta * high_sim_penalty.expand_as(beta)
             
             # 5. MAXIMUM topic dispersion across vocabulary
-            # Add stronger noise to break topic clustering patterns
+            # Add much stronger noise to break topic clustering patterns
             if self.training:
-                noise = torch.randn_like(beta) * 0.05  # Increase noise from 0.02 to 0.05
+                noise = torch.randn_like(beta) * 0.1  # Increase noise from 0.05 to 0.1
                 beta = beta + noise
                 beta = torch.clamp(beta, min=1e-8)  # Ensure positivity
             
@@ -468,14 +468,14 @@ class ECRTM(nn.Module):
         topic_clustering_penalty = torch.mean(torch.max(topic_similarity_matrix * off_diagonal_mask, dim=1)[0])
         
         # APOCALYPTIC diversity-ONLY balance for TD > 0.90
-        total_reg = (0.05 * coherence_reg +         # MINIMAL coherence weight (was 0.15)
-                    0.02 * smoothness_reg +         # Almost zero smoothness  
+        total_reg = (0.01 * coherence_reg +         # MINIMAL coherence weight (was 0.05)
+                    0.01 * smoothness_reg +         # Almost zero smoothness  
                     0.01 * sparsity_reg +          # Almost zero sparsity
-                    -0.8 * diversity_penalty +     # APOCALYPTIC diversity penalty (was -0.5)
-                    -0.5 * explicit_diversity_reg + # APOCALYPTIC explicit diversity  
-                    -0.35 * orthogonality_penalty + # APOCALYPTIC orthogonality constraint
-                    -0.12 * dispersion_penalty +   # STRONG topic dispersion
-                    -0.15 * topic_clustering_penalty) # NEW: Anti-clustering penalty
+                    -1.5 * diversity_penalty +     # APOCALYPTIC diversity penalty (was -0.8)
+                    -1.0 * explicit_diversity_reg + # APOCALYPTIC explicit diversity  
+                    -0.7 * orthogonality_penalty + # APOCALYPTIC orthogonality constraint
+                    -0.25 * dispersion_penalty +   # STRONGER topic dispersion
+                    -0.3 * topic_clustering_penalty) # STRONGER anti-clustering penalty
         
         return total_reg
 
@@ -495,12 +495,12 @@ class ECRTM(nn.Module):
             loss_TM = recon_loss + loss_KL
             loss_ECR = self.get_loss_ECR()
             
-            # EXPLICIT DIVERSITY LOSS - Add direct diversity penalty
+            # ULTRA EXTREME DIVERSITY LOSS - Maximum penalty for any similarity
             beta_norm = F.normalize(beta, p=2, dim=1)
             similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
             off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
-            # Penalize ANY similarity above 0.05 (extremely strict)
-            diversity_loss = torch.mean(similarity_matrix * off_diagonal_mask) * 10.0  # Massive penalty
+            # Penalize ANY similarity above 0.01 (ultra extreme strict)
+            diversity_loss = torch.mean(similarity_matrix * off_diagonal_mask) * 50.0  # APOCALYPTIC penalty
             
             loss = loss_TM + loss_ECR + diversity_loss  # Add diversity loss directly
 
@@ -523,12 +523,12 @@ class ECRTM(nn.Module):
             loss_TM = recon_loss + loss_KL
             loss_ECR = self.get_loss_ECR()
             
-            # EXPLICIT DIVERSITY LOSS - Add direct diversity penalty in fine-tuning too  
+            # APOCALYPTIC DIVERSITY LOSS - Maximum penalty in fine-tuning  
             beta_norm = F.normalize(beta, p=2, dim=1)
             similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
             off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
-            # EXTREME diversity penalty in fine-tuning
-            diversity_loss = torch.mean(similarity_matrix * off_diagonal_mask) * 20.0  # Even stronger in fine-tuning
+            # APOCALYPTIC diversity penalty in fine-tuning
+            diversity_loss = torch.mean(similarity_matrix * off_diagonal_mask) * 100.0  # MAXIMUM penalty possible
             
             # Enhanced DPO implementation
             loss_DPO = self.get_loss_DPO() if not getattr(self, 'disable_dpo', False) else torch.tensor(0.0, device=self.device)
