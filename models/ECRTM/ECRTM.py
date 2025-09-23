@@ -83,9 +83,16 @@ class ECRTM(nn.Module):
 
     def get_beta(self):
         dist = self.pairwise_euclidean_distance(self.topic_embeddings, self.word_embeddings)
-        beta = F.softmax(-dist / self.beta_temp, dim=0)
         
-        # ULTRA AGGRESSIVE diversity enhancement during fine-tuning
+        # ADAPTIVE beta temperature for maximum diversity
+        adaptive_beta_temp = self.beta_temp
+        if hasattr(self, 'is_finetuing') and self.is_finetuing:
+            # Further increase temperature during fine-tuning for extreme diversity
+            adaptive_beta_temp = self.beta_temp * 1.5
+        
+        beta = F.softmax(-dist / adaptive_beta_temp, dim=0)
+        
+        # APOCALYPTIC diversity enhancement during fine-tuning
         if hasattr(self, 'is_finetuing') and self.is_finetuing:
             # Apply maximum diversity-promoting transformation
             # 1. Normalize topic distributions
@@ -94,24 +101,29 @@ class ECRTM(nn.Module):
             # 2. Compute topic similarity matrix
             similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
             
-            # 3. ULTRA aggressive diversity penalty to beta directly
-            # Heavily reduce probability mass on similar topics
-            diversity_mask = 1.0 - torch.clamp(similarity_matrix.mean(dim=0, keepdim=True).t(), 0.0, 0.5)  # Reduce from 0.7 to 0.5
+            # 3. APOCALYPTIC diversity penalty to beta directly
+            # Extremely heavily reduce probability mass on similar topics
+            diversity_mask = 1.0 - torch.clamp(similarity_matrix.mean(dim=0, keepdim=True).t(), 0.0, 0.2)  # Reduce from 0.5 to 0.2
             beta = beta * diversity_mask.expand_as(beta)
             
-            # 4. Additional topic separation enhancement
+            # 4. EXTREME topic separation enhancement
             # Apply exponential penalty to high-similarity topics
-            high_sim_penalty = torch.exp(-2.0 * diversity_mask)  # Exponential penalty
+            high_sim_penalty = torch.exp(-5.0 * diversity_mask)  # Increase from -2.0 to -5.0
             beta = beta * high_sim_penalty.expand_as(beta)
             
-            # 5. Encourage topic dispersion across vocabulary
-            # Add noise to break topic clustering patterns
+            # 5. MAXIMUM topic dispersion across vocabulary
+            # Add stronger noise to break topic clustering patterns
             if self.training:
-                noise = torch.randn_like(beta) * 0.02  # Small noise for dispersion
+                noise = torch.randn_like(beta) * 0.05  # Increase noise from 0.02 to 0.05
                 beta = beta + noise
                 beta = torch.clamp(beta, min=1e-8)  # Ensure positivity
             
-            # 6. Renormalize to maintain probability constraints
+            # 6. APOCALYPTIC anti-similarity transformation
+            # Force topics to avoid any similar patterns
+            anti_similarity_transform = 1.0 / (1.0 + similarity_matrix.mean(dim=1, keepdim=True))
+            beta = beta * anti_similarity_transform.expand_as(beta)
+            
+            # 7. Renormalize to maintain probability constraints
             beta = F.normalize(beta, p=1, dim=1)
         
         return beta
@@ -429,37 +441,41 @@ class ECRTM(nn.Module):
         entropy = -torch.sum(beta * torch.log(beta + 1e-8), dim=1)
         sparsity_reg = -torch.mean(entropy)  # MINIMIZE entropy (MAXIMIZE focus)
         
-        # 4. Inter-topic diversity - ULTRA AGGRESSIVE diversity for TD > 0.90
+        # 4. Inter-topic diversity - KHỦNG KHIẾP AGGRESSIVE diversity for TD > 0.90
         topic_similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
-        # ULTRA strict threshold and MASSIVE penalty for maximum diversity
-        high_sim_mask = (topic_similarity_matrix > 0.3).float()  # REDUCE from 0.5 to 0.3 (ultra strict)
+        # KHỦNG KHIẾP strict threshold and APOCALYPTIC penalty for maximum diversity
+        high_sim_mask = (topic_similarity_matrix > 0.1).float()  # REDUCE from 0.3 to 0.1 (apocalyptic strict)
         off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
         diversity_penalty = torch.mean(topic_similarity_matrix * high_sim_mask * off_diagonal_mask)
         
-        # 5. ULTRA diversity regularization - force maximum topic separation
+        # 5. APOCALYPTIC diversity regularization - force absolute topic separation
         # Minimize pairwise cosine similarities between all topic pairs
         all_pairs_similarity = torch.mean(torch.triu(topic_similarity_matrix * off_diagonal_mask, diagonal=1))
         explicit_diversity_reg = all_pairs_similarity  # Minimize average pairwise similarity
         
-        # 6. MAXIMUM orthogonality constraint for TD > 0.90
+        # 6. APOCALYPTIC orthogonality constraint for TD > 0.90
         # Force topics to be as orthogonal as possible
         beta_centered = beta - beta.mean(dim=1, keepdim=True)
         orthogonality_matrix = torch.matmul(F.normalize(beta_centered, p=2, dim=1), 
                                           F.normalize(beta_centered, p=2, dim=1).t())
         orthogonality_penalty = torch.mean(torch.triu(orthogonality_matrix * off_diagonal_mask, diagonal=1)**2)
         
-        # 7. NEW: Topic dispersion regularization - spread topics across vocabulary space
+        # 7. EXTREME: Topic dispersion regularization - spread topics across vocabulary space
         topic_means = torch.mean(beta, dim=1, keepdim=True)  # Mean probability per topic
         dispersion_penalty = -torch.var(topic_means)  # Maximize variance in topic means
         
-        # ULTRA AGGRESSIVE diversity-first balance for TD > 0.90
-        total_reg = (0.15 * coherence_reg +         # MINIMAL coherence weight (was 0.3)
-                    0.05 * smoothness_reg +         # Minimal smoothness  
-                    0.02 * sparsity_reg +          # Almost zero sparsity
-                    -0.5 * diversity_penalty +     # MASSIVE diversity penalty (was -0.35)
-                    -0.35 * explicit_diversity_reg + # ULTRA strong explicit diversity  
-                    -0.25 * orthogonality_penalty + # STRONG orthogonality constraint
-                    -0.08 * dispersion_penalty)    # NEW: Topic dispersion encouragement
+        # 8. NEW: Anti-clustering regularization - penalize any clustering tendency
+        topic_clustering_penalty = torch.mean(torch.max(topic_similarity_matrix * off_diagonal_mask, dim=1)[0])
+        
+        # APOCALYPTIC diversity-ONLY balance for TD > 0.90
+        total_reg = (0.05 * coherence_reg +         # MINIMAL coherence weight (was 0.15)
+                    0.02 * smoothness_reg +         # Almost zero smoothness  
+                    0.01 * sparsity_reg +          # Almost zero sparsity
+                    -0.8 * diversity_penalty +     # APOCALYPTIC diversity penalty (was -0.5)
+                    -0.5 * explicit_diversity_reg + # APOCALYPTIC explicit diversity  
+                    -0.35 * orthogonality_penalty + # APOCALYPTIC orthogonality constraint
+                    -0.12 * dispersion_penalty +   # STRONG topic dispersion
+                    -0.15 * topic_clustering_penalty) # NEW: Anti-clustering penalty
         
         return total_reg
 
@@ -477,15 +493,22 @@ class ECRTM(nn.Module):
             recon_loss = -(bow * recon.log()).sum(axis=1).mean()
 
             loss_TM = recon_loss + loss_KL
-
             loss_ECR = self.get_loss_ECR()
             
-            loss = loss_TM + loss_ECR
+            # EXPLICIT DIVERSITY LOSS - Add direct diversity penalty
+            beta_norm = F.normalize(beta, p=2, dim=1)
+            similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
+            off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
+            # Penalize ANY similarity above 0.05 (extremely strict)
+            diversity_loss = torch.mean(similarity_matrix * off_diagonal_mask) * 10.0  # Massive penalty
+            
+            loss = loss_TM + loss_ECR + diversity_loss  # Add diversity loss directly
 
             rst_dict = {
                 'loss': loss,
                 'loss_TM': loss_TM,
-                'loss_ECR': loss_ECR
+                'loss_ECR': loss_ECR,
+                'diversity_loss': diversity_loss  # Add diversity loss to monitoring
             }
 
             return rst_dict
@@ -500,8 +523,15 @@ class ECRTM(nn.Module):
             loss_TM = recon_loss + loss_KL
             loss_ECR = self.get_loss_ECR()
             
+            # EXPLICIT DIVERSITY LOSS - Add direct diversity penalty in fine-tuning too  
+            beta_norm = F.normalize(beta, p=2, dim=1)
+            similarity_matrix = torch.matmul(beta_norm, beta_norm.t())
+            off_diagonal_mask = (1 - torch.eye(self.num_topics, device=beta.device))
+            # EXTREME diversity penalty in fine-tuning
+            diversity_loss = torch.mean(similarity_matrix * off_diagonal_mask) * 20.0  # Even stronger in fine-tuning
+            
             # Enhanced DPO implementation
-            loss_DPO = self.get_loss_DPO()
+            loss_DPO = self.get_loss_DPO() if not getattr(self, 'disable_dpo', False) else torch.tensor(0.0, device=self.device)
             loss_regularization = self.get_loss_regularization()
             
             # COHERENCE-OPTIMIZED loss weighting
@@ -525,16 +555,22 @@ class ECRTM(nn.Module):
                     dpo_scale = self.lambda_dpo * 1.5 if self.lambda_dpo > 0 else 0.0  # Higher baseline
                     reg_scale = self.lambda_reg * 1.5
             
-            # COHERENCE-AWARE final loss
-            loss = loss_TM + loss_ECR + dpo_scale * loss_DPO + reg_scale * loss_regularization
+            # DIVERSITY-FIRST final loss - Prioritize diversity over everything
+            if getattr(self, 'disable_dpo', False):
+                # Pure diversity training without DPO
+                loss = loss_TM + loss_ECR + diversity_loss + reg_scale * loss_regularization
+            else:
+                # Include DPO but prioritize diversity
+                loss = loss_TM + loss_ECR + diversity_loss + dpo_scale * loss_DPO + reg_scale * loss_regularization
 
-            # Comprehensive metrics như LLM training
+            # Comprehensive metrics với diversity tracking
             rst_dict = {
                 'loss': loss,
                 'loss_TM': loss_TM,
                 'loss_ECR': loss_ECR,
                 'loss_DPO': loss_DPO,
                 'loss_regularization': loss_regularization,
+                'diversity_loss': diversity_loss,  # Add diversity loss tracking
                 'dpo_scale': dpo_scale,
                 'reg_scale': reg_scale,
                 'reward_accuracy': np.mean(self.reward_accuracies) if self.reward_accuracies else 0.0,
